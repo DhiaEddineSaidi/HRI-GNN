@@ -1,7 +1,7 @@
-# Master PhD Action Plan & Study Checklist (Year 1)
+# PhD Action Plan & Study Checklist (Year 1)
 **Project Title:** Intelligence artificielle adaptative et raisonnement explicable pour les systèmes d'apprentissage automatique
 **Candidate:** DhiaEddine Saidi
-**Supervisor:** Pr. Haythem Ghazouani
+**Supervisor:** Dr. Haythem Ghazouani
 **Start Date:** February 22, 2026
 
 This is the definitive, all-in-one guide for Year 1. It merges your official deliverables (T1-T4), the weekly onboarding pipeline (S1-S12), the tool strategy, and the specific concepts/resources you must master coming from a Software Engineering background.
@@ -33,6 +33,49 @@ Obsidian is your lab notebook. We use it instead of Notion/Word because it saves
   3. **Pass 3:** Read the Methodology. Establish the *How*.
   4. **Pass 4:** Write a 3-bullet summary in Obsidian: What problem did they solve? What was their innovation? How does it relate to your thesis? Use tags (like `#GNN`, `#RAVEN`).
 
+#### ML-Knowledge-Base
+│
+├── 00 Foundations
+│   ├── Scalar.md
+│   ├── Vector.md
+│   ├── Matrix.md
+│   ├── Tensor.md
+│   ├── Linear Algebra.md
+│
+├── 01 Machine Learning
+│   ├── Supervised Learning.md
+│   ├── Unsupervised Learning.md
+│   ├── Overfitting.md
+│   ├── Bias-Variance.md
+│
+├── 02 Neural Networks
+│   ├── Neural Network.md
+│   ├── Activation Function.md
+│   ├── Loss Function.md
+│   ├── Backpropagation.md
+│   ├── Gradient Descent.md
+│
+├── 03 Architectures
+│   ├── CNN.md
+│   ├── RNN.md
+│   ├── Transformer.md
+│   ├── GNN.md
+│
+├── 04 Data Types
+│   ├── Image Data.md
+│   ├── Time Series.md
+│   ├── Graph Data.md
+│   ├── Text Data.md
+│
+├── 05 Python & Tools
+│   ├── NumPy.md
+│   ├── PyTorch.md
+│   ├── TensorFlow.md
+│
+└── 99 Examples
+    ├── Tensor Examples.md
+    ├── CNN Example.md
+
 ---
 
 ## 2. Phase 0: The Core AI Foundations (Ongoing Prerequisites)
@@ -62,7 +105,7 @@ Obsidian is your lab notebook. We use it instead of Notion/Word because it saves
 *Status: Partially Completed.*
 - [x] Install Python (Anaconda), PyTorch, Jupyter Lab.
 - [x] Create the `thesis_project` code architecture (`src`, `data`, `notebooks`).
-- [ ] Initialize Git and create a GitHub repository.
+- [x] Initialize Git and create a GitHub repository.
 
 ### S3-S4 (Mar 8 – Mar 21): Foundational Reading (The 4-Pass Method)
 *Action: Create an Obsidian note for each paper summarizing the Problem, Innovation, and Relevance.*
