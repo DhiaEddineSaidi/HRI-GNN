@@ -57,7 +57,7 @@ After a brief introduction in which Professor Kautz introduced the three major A
 - Henry Kautz introduced a 6 type taxonomy for NSC  :
 
 	- **Type 1; SYMBOLIC NEURO SYMBOLIC :** Currently the deep learning SOP (Standard Operating Procedure) for NLP (Natural Language Processing). 
-	 Symbolic input (in the case of language: sequences of word) are each converted to vectors by **[[word2vec]], GloVe**, or similar and passed to a neural network. The network's output units convert the previous layer to a symbolic category or sequence of symbols via **[[softmax]]** operation
+	 Symbolic input (in the case of language: sequences of word) are each converted to vectors by **[[word2vec]], GloVe**, or similar and passed to a neural network. The network's output units convert the previous layer to a symbolic category or sequence of symbols via **[[Softmax]]** operation
 	 ![[Pasted image 20260309024517.png|641]]
 	
 	-  **Type 2; SYMBOLIC\[NEURO\]**: this architecture employs a Neural pattern recognition subroutine within a symbolic problem solver. AlphaGo is a prototypical example of this design. The problem solver is the [[monte-carlo_tree_search_algorithm]]  and its heuristic evaluation function is a neural network? Most robots and autonomous vehicles are symbolic\[Neuro\]                                 
@@ -67,32 +67,3 @@ After a brief introduction in which Professor Kautz introduced the three major A
 	-  **Type 4; NEURO:SYMBOLIC:**
 	-  **Type 5; NEUROsymbolic:**
 	-  **Type 6; NEURO \[SYMBOLIC \]**
-
-### **1. Logic Tensor Networks (LTN) [Serafini and d'Avila Garcez, 2016]**
-**What it does:**
-- LTN takes **First-Order Logic formulas** (like ∀x, ∃y, etc.) and gives them a **real-valued truth value** (between 0 and 1) using **fuzzy logic semantics**.
-- It then uses **neural networks** to learn the best interpretation of the predicates.
-
-**Simple Example:**
-- You give the rule: `∀x (Student(x) → Smart(x))`
-- The neural network learns what `Student` and `Smart` mean by looking at data.
-- A person named "Alice" might be a Student with truth 0.95 and Smart with truth 0.85.
-- The system checks if the rule holds (it does, because 0.95 → 0.85 is valid in fuzzy logic).
-
-**Why it's "fuzzy FOL":** It keeps the quantifiers and structure of FOL, but the truth values are fuzzy.
-
-### **2. Tensor Product Representations [Huang et al., 2017]**
-**What it does:**
-- It uses a mathematical operation called the **"tensor product"** to combine symbolic representations (like "John" and "loves" and "Mary") into a single vector that represents the whole sentence or fact.
-- This is a way to **embed symbolic structures into continuous vector spaces**.
-**Connection to Fuzzy:**
-- Once symbols become vectors, you can measure **similarities** between them.
-- "John loves Mary" and "John likes Mary" might have similar vector representations (fuzzy similarity), even if the symbols are different.
-### **3. Fuzzy Methods in FOL [Diligenti et al., 2017]**
-**What they do:**
-- They explicitly use **T-norms** (the mathematical operations that define fuzzy logic AND, OR, and IMPLIES) to turn logical formulas into **continuous loss functions** for neural networks
-**Example:**
-- Suppose you have a rule: `∀x (Cat(x) → Mammal(x))`
-- You turn this into a **loss function**: `loss = 1 - (Cat(x) → Mammal(x))` for all x.
-- If the network predicts a picture is a Cat (0.9) but not a Mammal (0.1), the fuzzy implication gives a low value (e.g., 0.2), so the loss is high (0.8).
-- The network is trained to minimize this loss, thus learning to respect the logical rule.
