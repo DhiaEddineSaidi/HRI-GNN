@@ -3,7 +3,7 @@ Utils for processing RAVEN dataset
 """
 import xml.etree.ElementTree as ET
 
-from const import NUM_VALUES, UNI_VALUES
+from const.const import NUM_VALUES, UNI_VALUES
 
 def build_panel_text_info(xml_data, panel_idx):
     """
@@ -58,7 +58,7 @@ def build_panel_text_info(xml_data, panel_idx):
     return "\n".join(lines)
 
 
-def xml_parser(xml_path):
+def raven_xml_file_parser(xml_path):
     """
     Parse the XML file.
     

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from pathlib import Path
 
-from utils import xml_parser, build_panel_text_info
+from utils.utils import raven_xml_file_parser, build_panel_text_info
 
 
 def visualize_rpm_problem_summary(images, target, xml_data):
@@ -268,20 +268,20 @@ def visualize_npz_file_content(npz_path, save_dir=None):
     save_dir : str, optional
         Répertoire pour sauvegarder les visualisations
     """
-    xml_path = npz_path.replace(".npz", ".xml")
-    xml_data = xml_parser(xml_path)
+    xml_file_path = npz_path.replace(".npz", ".xml")
+    xml_data = raven_xml_file_parser(xml_file_path)
 
     data = print_npz_structure(npz_path)
 
     images = data['image']   # (16, 160, 160)
     target = data['target']  # scalaire 0-7
 
-    basename = Path(npz_path).stem
+    basename = str(Path(npz_path).parent.stem) + str(Path(npz_path).stem).replace("RAVEN","")
 
     save_path = None
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"{basename}_visualization.png")
+        save_path = os.path.join(save_dir, f"{basename}.png")
 
     visualize_rpm_problem(images, target, xml_data, save_path)
 
