@@ -82,20 +82,20 @@ Chaque **entité** (objet géométrique) possède 7 attributs :
 
 ### 5.1 Attributs gouvernés par des règles (Rule-Governing)
 
-| Attribut | Valeurs possibles | Description |
-|----------|-------------------|-------------|
-| **Number** | 1–9 | Nombre d'entités dans le layout |
-| **Position** | Slots dans la grille | Quels emplacements sont occupés |
-| **Type** | triangle, carré, pentagone, hexagone, cercle | Forme géométrique |
-| **Size** | 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 | Taille relative de l'objet |
-| **Color** | 255→0 (10 niveaux de gris) | Couleur en niveaux de gris |
+| Attribut     | Valeurs possibles                            | Description                     |
+| ------------ | -------------------------------------------- | ------------------------------- |
+| **Number**   | 1–9                                          | Nombre d'entités dans le layout |
+| **Position** | Slots dans la grille                         | Quels emplacements sont occupés |
+| **Type**     | triangle, carré, pentagone, hexagone, cercle | Forme géométrique               |
+| **Size**     | 0.4, 0.5, 0.6, 0.7, 0.8, 0.9                 | Taille relative de l'objet      |
+| **Color**    | 255→0 (10 niveaux de gris)                   | Couleur en niveaux de gris      |
 
 ### 5.2 Attributs de bruit (Noise)
 
-| Attribut | Description |
-|----------|-------------|
+| Attribut       | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
 | **Uniformity** | Est-ce que les entités dans un panneau partagent les mêmes attributs ? |
-| **Angle** | Rotation propre de l'objet (-135° à 180°) |
+| **Angle**      | Rotation propre de l'objet (-135° à 180°)                              |
 
 ## 6. Les 4 Types de Règles
 
