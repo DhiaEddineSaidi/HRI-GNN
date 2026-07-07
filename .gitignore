@@ -2,6 +2,7 @@
 __pycache__/
 .ipynb_checkpoints/
 data/raw/*
+data/new_raw/*
 data/assets/*
 !data/raw/.gitkeep
 data/processed/*
@@ -10,3 +11,4 @@ data/processed/*
 .obsidian/
 *.pdf
 docs/.trash/
+pyrefly.toml
