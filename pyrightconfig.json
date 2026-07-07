@@ -1,4 +1,12 @@
 {
+    "venvPath": "C:/Users/dhias/DevTools/miniconda3/envs/",
+    "venv": "nsc",
+    "useLibraryCodeForTypes": true,
+    "executionEnvironments": [
+        {
+            "root": "."
+        }
+    ],
     "include": [
         "src",
         "tests"
