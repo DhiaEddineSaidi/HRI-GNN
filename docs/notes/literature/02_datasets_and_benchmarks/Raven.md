@@ -129,7 +129,7 @@ Les règles s'appliquent **ligne par ligne** dans la matrice 3×3 :
 | Arithmetic       |        | (**)     |      |      |       |
 | Distribute Three |        |          |      |      |       |
 (\*) : Progression here means moving in Layout slots in order
-(\**) : + means SET_UNION and - SET_DIFF
+(\**\*) : + means SET_UNION and - SET_DIFF
 ## 7. Structure des Fichiers NPZ
 
 Chaque fichier `.npz` contient :
