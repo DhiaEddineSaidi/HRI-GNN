@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from const.const import CONFIGURATIONS
+from config.constants import CONFIGURATIONS
 from utils.utils import raven_xml_file_parser
 
 class RavenDataset(Dataset):
@@ -42,9 +42,9 @@ class RavenDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, index):
         # Récupération des infos du panneau
-        archive_path, panel_idx = self.samples[idx]
+        archive_path, panel_idx = self.samples[index]
         
         # Chargement à la volée (Lazy loading) pour préserver la RAM
         with np.load(archive_path, allow_pickle=True) as data:
