@@ -1,14 +1,12 @@
 import ast
-
-import xml.etree.ElementTree as ET
-
+from xml.etree.ElementTree import parse ,Element, ElementTree
 import numpy as np
 
 from hri_gnn.utils.visuals import panel_description_text
 from hri_gnn.config.const import CONFIGURATIONS, SPLITS
 from hri_gnn.utils.paths import get_dataset_path
 
-def rpm_xml_tree_parser(images: list, annotations_tree: ET.ElementTree[ET.Element]) -> tuple[list[dict], list[dict]]:
+def rpm_xml_tree_parser(images: list, annotations_tree: ElementTree[Element]) -> tuple[list[dict], list[dict]]:
     """
     Parses the passed tree and fullfill the panels and the rules lists before reterning them
 
@@ -199,7 +197,7 @@ def rpm_problem_data(config, id, split="train"):
             images = npz_data['image']
             rpm_data['target'] = npz_data['target']
 
-        annotations_tree = ET.parse(xml_file_path)
+        annotations_tree = parse(xml_file_path)
         panels, rules = rpm_xml_tree_parser(images, annotations_tree)
         rpm_data['panels'] = panels
         rpm_data['rules'] = rules
