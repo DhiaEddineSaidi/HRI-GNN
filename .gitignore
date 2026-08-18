@@ -17,3 +17,6 @@ pyrefly.toml
 
 # Python cache
 **/__pycache__/
+
+# Python packaging
+*.egg-info/
