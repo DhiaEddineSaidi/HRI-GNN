@@ -1,0 +1,19 @@
+# VS Code configuration
+.vscode/
+
+# Data
+ressources/raw/raven-20000/
+ressources/raw/raven-100/
+
+# Environment variables
+.env
+
+# Pyrefly configuration
+pyrefly.toml
+
+# Python virtual environment
+.venv/
+pyrefly.toml
+
+# Python cache
+**/__pycache__/

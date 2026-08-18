@@ -1,0 +1,10 @@
+[project]
+name = "HRI-GNN"
+version = "0.1.0"
+requires-python = ">=3.14"
+authors = [
+  {name = "DhiaEddine Saidi", email = "dhiasaidi.ensit@gmail.com"},
+]
+description = "merging Hierarchical Rule Induction and Graph Neural Networks for Visual Reasoning Tasks"
+readme = "README.md"
+keywords = ["Visual Reasoning", "HRI", "GNN", "CNN"]
