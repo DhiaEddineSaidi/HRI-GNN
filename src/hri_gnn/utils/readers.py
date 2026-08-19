@@ -6,7 +6,7 @@ from hri_gnn.utils.visuals import panel_description_text
 from hri_gnn.config.const import CONFIGURATIONS, SPLITS
 from hri_gnn.utils.paths import get_dataset_path
 
-def rpm_xml_tree_parser(images: list, annotations_tree: ElementTree[Element]) -> tuple[list[dict], list[dict]]:
+def rpm_xml_tree_parser(images: list, annotations_tree) -> tuple[list[dict], list[dict]]:
     """
     Parses the passed tree and fullfill the panels and the rules lists before reterning them
 
@@ -61,6 +61,7 @@ def rpm_xml_tree_parser(images: list, annotations_tree: ElementTree[Element]) ->
                 entity: dict = {}
                 entity["bbox"]= ast.literal_eval(Entity_src.attrib["bbox"])
                 entity["real_bbox"]= ast.literal_eval(Entity_src.attrib["real_bbox"])
+                entity["mask"]= ast.literal_eval(Entity_src.attrib["mask"])
                 entity["Type"]= int(Entity_src.attrib["Type"])
                 entity["Size"]= int(Entity_src.attrib["Size"])
                 entity["Color"]= int(Entity_src.attrib["Color"])
@@ -204,3 +205,19 @@ def rpm_problem_data(config, id, split="train"):
         return rpm_data
     else:
         raise FileNotFoundError(f"One of these two paths: {xml_file_path} or {npz_file_path} does not exist !")
+
+
+def rle_decode(mask_rle, shape):
+    '''
+    mask_rle: run-length as string formated (start length)
+    shape: (height,width) of array to return 
+    Returns numpy array, 1 - mask, 0 - background
+    '''
+    s = mask_rle[1:-1].split(",")
+    starts, lengths = [np.asarray(x, dtype=int) for x in (s[0:][::2], s[1:][::2])]
+    starts -= 1
+    ends = starts + lengths
+    img = np.zeros(shape[0] * shape[1], dtype=np.uint8)
+    for lo, hi in zip(starts, ends):
+        img[lo:hi] = 1
+    return img.reshape(shape)
