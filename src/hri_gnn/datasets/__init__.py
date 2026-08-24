@@ -1,11 +1,12 @@
 import os
+import random
 
 import numpy as np
 
 import torch
 import torchvision.transforms.v2.functional as F
 
-from hri_gnn.config.const import CONFIGURATIONS_LITS
+from hri_gnn.config.const import Configuration, SPLITS
 from hri_gnn.utils.data import readers, get_dataset_path
 
 
@@ -18,13 +19,19 @@ class RavenDataset(torch.utils.data.Dataset):
     
     The dataset yields crops of all panels in the problem, along with attributes and bounding boxes.
     """
-    def __init__(self, dataset:str = "raven-100" , split:str = "train" , limit_per_config:int = 5):
+    def __init__(self, dataset:str = "raven-100" , split:str = "train" , percentage_limit:float = 0.1):
         self.dataset = dataset
         self.split = split
-        self.limit_per_config = limit_per_config
+        self.percentage_limit = percentage_limit
         self.bg_color = 255
         self.index_list = []
 
+        # validate args
+        if SPLITS.index(split) < 0:
+            raise ValueError(f"split {split} is not valid. Valid values are {SPLITS}")
+        if percentage_limit > 1.0 or percentage_limit < 0.0:
+            raise ValueError(f"percentage_limit {percentage_limit} is not valid. Valid values are between 0.0 and 1.0")
+        
         # load dataset 
         dataset_path, length_per_config = get_dataset_path(dataset)
 
@@ -34,7 +41,12 @@ class RavenDataset(torch.utils.data.Dataset):
             xml_files = config_folder_path.glob(f"RAVEN_*_{split}.xml")
             for xml_file in xml_files:
                 problem_id = xml_file.stem.split('_')[1]
-                self.index_list.append((config, problem_id))
+                self.index_list.append((config, int(problem_id)))
+                
+        if self.percentage_limit != 1.0:
+            # calculate the limit number of problems to take from each config
+            limit = int(len(self.index_list) * self.percentage_limit)
+            self.index_list = random.sample(self.index_list, k=limit)
 
     def __len__(self):
         return len(self.index_list)
@@ -60,10 +72,10 @@ class RavenDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         config, problem_id = self.index_list[index]
-        problem = readers.read_config_id_problem(config, problem_id, self.dataset)
+        problem = readers.read_config_id_problem(config, int(problem_id), self.dataset)
         
         # encoding the config
-        config_index = CONFIGURATIONS_LITS.index(config)
+        config_index = Configuration.all().index(config)
 
         crops, attributes, bboxes, panel_indices, config_indices, problem_indices = [], [], [], [], [], []
 
@@ -136,4 +148,10 @@ def gnn_flat_collate(batch):
     flat_problem_indices = torch.cat(all_problem_indices, dim=0) # Idem
     flat_batch_indices = torch.cat(batch_indices, dim=0)     # Index of the problem in the batch
     
-    return flat_crops, flat_attrs, flat_bboxes, flat_panel_indices, flat_config_indices, flat_problem_indices, flat_batch_indices
+    return (flat_crops,
+            flat_attrs,
+            flat_bboxes, 
+            flat_panel_indices,
+            flat_config_indices,
+            flat_problem_indices, 
+            flat_batch_indices)
