@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 import hri_gnn.utils.visualization as visuals
 
-from hri_gnn.config.const import CONFIGURATIONS_LITS
+from hri_gnn.config.const import Configuration
 
 def watch_problem(problem, challenge= False, show_answer=False):
     """
@@ -167,7 +167,7 @@ def plot_random_panel(problem, seed=None):
 
 # flat_crops, flat_attrs, flat_bboxes, flat_panel_indices, flat_batch_indices
 
-def plot_crop(crop, attr, bbox, panel_id, config, batch_id):
+def plot_crop(crop, attr, bbox, panel_id, config, problem_id, batch_id):
     """
     Plot a crop of a panel
 
@@ -183,13 +183,23 @@ def plot_crop(crop, attr, bbox, panel_id, config, batch_id):
         The panel id
     config: str
         The configuration name
+    problem_id: int
+        The problem id
     batch_id: int
         The batch id
     """
     fig,ax = plt.subplots(figsize=(2,2))
     # matplotlib (numpy based) need 
     ax.imshow(crop.permute(2,1,0), cmap="gray")
-    ax.set_title(f"attrs: {attr}\nshape:{crop.shape}\nbbox:{bbox}\npanel_id:{panel_id}\nconfig:{CONFIGURATIONS_LITS[config]}\nbatch_id:{batch_id}", fontsize=9)
+    title_parts = []
+    title_parts.append(f"batch_id:{batch_id}")
+    title_parts.append(f"config:{Configuration.all()[config]}")
+    title_parts.append(f"problem_id:{problem_id}")
+    title_parts.append(f"panel_id:{panel_id}")
+    title_parts.append(f"attrs: {attr}")
+    title_parts.append(f"shape:{crop.shape}")
+    title_parts.append(f"bbox:{bbox}")
+    ax.set_title("\n".join(title_parts), fontsize=9)
     ax.axis("off")
     plt.tight_layout()
     plt.show()

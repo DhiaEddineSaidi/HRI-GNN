@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from hri_gnn.config.const import CONFIGURATIONS_LITS
+from hri_gnn.config.const import Configuration
 from hri_gnn.utils.data import get_dataset_path
 
 def problem_builder(images: list, xml_tree) -> tuple[list[dict], list[dict]]:
@@ -99,7 +99,7 @@ def problem_builder(images: list, xml_tree) -> tuple[list[dict], list[dict]]:
 def read_split_problems(split, dataset="raven-100"):
     data_folder, num_prbs_per_confg = get_dataset_path(dataset)
     problems =[]
-    for config in CONFIGURATIONS_LITS:
+    for config in Configuration.all():
         problems_ids = [int(file.stem.split("_")[1]) for file in data_folder.glob(f"{config}/RAVEN_*{split}.xml")]
         problems.extend([read_config_id_problem(config, prblm_id, dataset) for prblm_id in problems_ids])
     return problems
@@ -139,8 +139,8 @@ def read_config_id_problem(config, prblm_id, dataset="raven-100"):
     # Get the dataset folder path and the number of problems per config
     data_folder, num_prbs_per_confg = get_dataset_path(dataset)
     
-    if config not in CONFIGURATIONS_LITS:
-        raise ValueError(f"Config :{config} is not valid, possible values :{CONFIGURATIONS_LITS}")
+    if config not in Configuration.all():
+        raise ValueError(f"Config :{config} is not valid, possible values :{Configuration.all()}")
     if prblm_id not in range(num_prbs_per_confg):
         raise ValueError(f"Problem id :{prblm_id} is not valid, there is no problem with this id in {config} config in the dataset: {dataset}")
     
@@ -203,10 +203,10 @@ def read_random_problem(config= None, dataset:str='raven-100', seed=None):
         np.random.seed(seed)
 
     if config is None:
-        config = np.random.choice(CONFIGURATIONS_LITS)
+        config = np.random.choice(Configuration.all())
     else:
-        if config not in CONFIGURATIONS_LITS:
-            raise ValueError(f"Config :{config} is not valid, possible values :{CONFIGURATIONS_LITS}")
+        if config not in Configuration.all():
+            raise ValueError(f"Config :{config} is not valid, possible values :{Configuration.all()}")
     
     # Randomly select a problem id
     prblm_id = np.random.randint(0, num_prbs_per_confg)
