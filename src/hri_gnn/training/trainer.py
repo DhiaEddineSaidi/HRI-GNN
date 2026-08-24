@@ -1,169 +1,257 @@
-"""
-Trainer pour l'entraînement de l'encodeur-décodeur RAVEN.
-
-Gère la boucle d'entraînement, la validation, l'évaluation,
-et le suivi de l'historique des pertes.
-"""
-
 import torch
-import torch.nn.functional as F
+import torch.nn as nn
+from tqdm.auto import tqdm
+
+from hri_gnn.metrics import CompositeMetric
+from hri_gnn.config.const import METRICS, ENTITY_ATTRIBUTES
 
 
 class Trainer:
     """
-    Gestionnaire d'entraînement pour le modèle RAVEN.
+    Trainer for the RavenCnnEncoder model.
 
     Paramètres
     ----------
     model : nn.Module
-        Le modèle à entraîner (RavenEncoderDecoder).
+        The model to train (RavenEncoderDecoder).
     optimizer : torch.optim.Optimizer
-        L'optimiseur (ex: Adam).
+        The optimizer (ex: Adam).
     criterion : nn.Module
-        La fonction de perte (CompositeLoss).
+        The loss function (CompositeLoss).
     device : torch.device
-        Le périphérique (CPU ou GPU).
+        The device (CPU or GPU).
     """
 
-    def __init__(self, model, optimizer, criterion, device):
+    def __init__(self, model: nn.Module, optimizer:torch.optim.Optimizer, criterion:nn.Module, metrics= METRICS, metrics_detials= False, device= None):
         self.model = model
+        # self.dataloader = dataloader
         self.optimizer = optimizer
         self.criterion = criterion
-        self.device = device
+        self.metrics = metrics
+        self.metrics_detials = metrics_detials
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(f"No device provided, Trainer will use: {self.device}")
+        else:
+            self.device = device
+            print(f"Device provided, Trainer will use: {self.device}")
 
-    def train_step(self, images, targets):
+        # Initialize metrics
+        self.composite_metrics = CompositeMetric(metric_names=self.metrics, details=self.metrics_detials, device=device)
+
+    def train_step(self, X_train, y_train):
         """
-        Exécute une étape d'entraînement sur un batch.
+        Execute a training step on a batch.
 
         Paramètres
         ----------
-        images : Tensor (B, 1, 160, 160)
-        targets : Tensor (B, 10, 13)
+        X_train : Tensor (B, 1, 80, 80) of crops images
+        y_train : Tensor (B, 4) ground truth of vector attributes
 
         Retourne
         --------
-        dict avec les pertes : 'total', 'presence', 'attr', 'recon' (floats)
+        dict of the losses and metrics
         """
+        # set the model to train mode
         self.model.train()
-        images = images.to(self.device)
-        targets = targets.to(self.device)
 
+        # move the data to the device (device agnostic code)
+        X_train = X_train.to(self.device)
+        y_train = y_train.to(self.device)
+
+        # zero the gradients
         self.optimizer.zero_grad()
 
-        pred_z, pred_img = self.model(images)
-        losses = self.criterion(pred_z, pred_img, targets, images)
-        total_loss = losses['total']
+        # forward pass
+        logits = self.model(X_train)
 
-        total_loss.backward()
+        # compute the loss
+        losses = self.criterion(logits, y_train)
+        # compute metrics
+        metrics = self.composite_metrics.compute(logits, y_train)
+        composite_loss = losses['composit']
+
+        # backward pass
+        composite_loss.backward()
+        # update the weights
         self.optimizer.step()
 
-        return {
-            "total": losses['total'].item(),
-            "presence": losses['presence'].item(),
-            "attr": losses['attr'].item(),
-            "recon": losses['recon'].item()
-        }
+        return {"losses": losses, "metrics": metrics}
 
-    def evaluation_step(self, images, targets):
+    def test_step(self, X_test, y_test):
         """
-        Exécute une étape d'évaluation sur un batch (sans gradients).
+        Execute an test step on a batch (without gradients).
 
-        Paramètres
-        ----------
-        images : Tensor (B, 1, 160, 160)
-        targets : Tensor (B, 10, 13)
+        Args
+        ----
+        X_test : Tensor (B, 1, 160, 160)
+        y_test : Tensor (B, 4)
 
-        Retourne
-        --------
-        dict avec les pertes : 'total', 'presence', 'attr', 'recon' (floats)
+        Returns
+        -------
+        dict of the losses and metrics
         """
+        # set the model to eval mode
         self.model.eval()
-        images = images.to(self.device)
-        targets = targets.to(self.device)
+        # move the data to the device (device agnostic code)
+        X_test = X_test.to(self.device)
+        y_test = y_test.to(self.device)
 
-        with torch.no_grad():
-            pred_z, pred_img = self.model(images)
-            losses = self.criterion(pred_z, pred_img, targets, images)
+        # compute the loss and metrics in inference mode
+        with torch.inference_mode():
+            logits = self.model(X_test)
+            losses = self.criterion(logits, y_test)
+            metrics = self.composite_metrics.compute(logits, y_test)
 
         return {
-            "total": losses['total'].item(),
-            "presence": losses['presence'].item(),
-            "attr": losses['attr'].item(),
-            "recon": losses['recon'].item()
+            "losses": losses, 
+            "metrics": metrics
         }
 
-    def fit(self, train_loader, val_loader, epochs, checkpoint_dir=None):
+    def fit(self, train_dataloader, test_dataloader, epochs, checkpoint_dir=None, verbose=True):
         """
-        Boucle d'entraînement complète sur plusieurs époques.
+        Complete training loop over several epochs.
 
-        Paramètres
-        ----------
-        train_loader : DataLoader
-            Chargeur de données d'entraînement.
-        val_loader : DataLoader
-            Chargeur de données de validation.
+        Args
+        ----
+        train_dataloader : DataLoader
+            Training data loader.
+        test_dataloader : DataLoader
+            Validation data loader.
         epochs : int
-            Nombre d'époques.
+            Number of epochs.
         checkpoint_dir : str, optional
-            Répertoire pour sauvegarder les checkpoints.
+            Directory to save checkpoints.
 
-        Retourne
-        --------
+        Returns
+        -------
         dict
-            Historique des pertes avec les clés :
-            'train_total', 'train_presence', 'train_attr', 'train_recon',
-            'val_total', 'val_presence', 'val_attr', 'val_recon'
-            Chaque valeur est une liste de floats (une par époque).
+            History of losses with the keys:
+            'train_total', 'train_type', 'train_size', 'train_color', 'train_angle',
+            'test_total', 'test_type', 'test_size', 'test_color', 'test_angle'
+            Each value is a list of floats (one per epoch).
         """
         history = {
-            'train_total': [], 'train_presence': [], 'train_attr': [], 'train_recon': [],
-            'val_total': [], 'val_presence': [], 'val_attr': [], 'val_recon': []
+            'train_loss_composit': [], 'train_loss_type': [], 'train_loss_size': [], 'train_loss_color': [], 'train_loss_angle': [],
+            'test_loss_composit': [], 'test_loss_type': [], 'test_loss_size': [], 'test_loss_color': [], 'test_loss_angle': []
         }
+        for metric in self.metrics:
+            if self.metrics_detials:
+                for attribute in {"overall"} | ENTITY_ATTRIBUTES.keys():
+                    history[f"train_{metric}_{attribute}"] = []
+                    history[f"test_{metric}_{attribute}"] = []
+            else:
+                history[f"train_{metric}"] = []
+                history[f"test_{metric}"] = []
 
-        for epoch in range(epochs):
+
+        
+
+        for epoch in tqdm(range(epochs)):
             # --- Entraînement ---
-            train_sums = {'total': 0.0, 'presence': 0.0, 'attr': 0.0, 'recon': 0.0}
+            train_loss_sums = {'composit': 0.0, 'type': 0.0, 'size': 0.0, 'color': 0.0, 'angle':0.0}
+            if self.metrics_detials:
+                train_metrics_sums = {metric:{attribute:0.0 for attribute in {"overall"} | ENTITY_ATTRIBUTES.keys()} for metric in self.metrics}
+            else:
+                train_metrics_sums = {metric: 0.0 for metric in self.metrics}
             num_train_batches = 0
 
-            for batch in train_loader:
-                images, targets = batch[0], batch[1]
-                losses = self.train_step(images, targets)
-                for key in train_sums:
-                    train_sums[key] += losses[key]
+            for batch in train_dataloader:
+                X_train, y_train = batch[0], batch[1]
+                step_output = self.train_step(X_train, y_train)
+                for key in train_loss_sums.keys():
+                    train_loss_sums[key] += step_output["losses"][key]
+                
+                for metric in train_metrics_sums.keys():
+                    if self.metrics_detials:
+                        # pyrefly: ignore [not-iterable]
+                        for attribute in train_metrics_sums[metric].keys():
+                            train_metrics_sums[metric][attribute] += step_output["metrics"][metric][attribute]
+                    else:
+                        # pyrefly: ignore [unsupported-operation]
+                        train_metrics_sums[metric] += step_output["metrics"][metric]
+                        
                 num_train_batches += 1
 
             # Moyennes d'entraînement
-            for key in train_sums:
-                avg = train_sums[key] / max(num_train_batches, 1)
-                history[f'train_{key}'].append(avg)
+            for key in train_loss_sums:
+                avg = train_loss_sums[key] / max(num_train_batches, 1)
+                history[f'train_loss_{key}'].append(avg)
 
-            # --- Validation ---
-            val_sums = {'total': 0.0, 'presence': 0.0, 'attr': 0.0, 'recon': 0.0}
-            num_val_batches = 0
+            for metric in train_metrics_sums:
+                if self.metrics_detials:
+                    # pyrefly: ignore [not-iterable]
+                    for attribute in train_metrics_sums[metric]:
+                        # pyrefly: ignore [not-iterable]
+                        avg = train_metrics_sums[metric][attribute] / max(num_train_batches, 1)
+                        history[f'train_{metric}_{attribute}'].append(avg)
+                else:
+                    # pyrefly: ignore [unsupported-operation]
+                    avg = train_metrics_sums[metric] / max(num_train_batches, 1)
+                    history[f'train_{metric}'].append(avg)
 
-            for batch in val_loader:
-                images, targets = batch[0], batch[1]
-                losses = self.evaluation_step(images, targets)
-                for key in val_sums:
-                    val_sums[key] += losses[key]
-                num_val_batches += 1
+            # --- Test ---
+            test_sums = {'composit': 0.0, 'type': 0.0, 'size': 0.0, 'color': 0.0, 'angle':0.0}
+            if self.metrics_detials:
+                test_metrics_sums = {metric:{attribute:0.0 for attribute in {"overall"} | ENTITY_ATTRIBUTES.keys()} for metric in self.metrics}
+            else:
+                test_metrics_sums = {metric: 0.0 for metric in self.metrics}
+            num_test_batches = 0
+
+            for batch in test_dataloader:
+                X_test, y_test = batch[0], batch[1]
+                test_output = self.test_step(X_test, y_test)
+                for key in test_sums:
+                    test_sums[key] += test_output["losses"][key]
+                
+                for metric in test_metrics_sums.keys():
+                    if self.metrics_detials:
+                        # pyrefly: ignore [not-iterable]
+                        for attribute in test_metrics_sums[metric].keys():
+                            test_metrics_sums[metric][attribute] += test_output["metrics"][metric][attribute]
+                    else:
+                        # pyrefly: ignore [unsupported-operation]
+                        test_metrics_sums[metric] += test_output["metrics"][metric]
+                        
+                num_test_batches += 1
 
             # Moyennes de validation
-            for key in val_sums:
-                avg = val_sums[key] / max(num_val_batches, 1)
-                history[f'val_{key}'].append(avg)
+            for key in test_sums:
+                avg = test_sums[key] / max(num_test_batches, 1)
+                history[f'test_loss_{key}'].append(avg)
+
+            for metric in test_metrics_sums:
+                if self.metrics_detials:
+                    # pyrefly: ignore [not-iterable]
+                    for attribute in test_metrics_sums[metric].keys():
+                        # pyrefly: ignore [not-iterable]
+                        avg = test_metrics_sums[metric][attribute] / max(num_test_batches, 1)
+                        history[f'test_{metric}_{attribute}'].append(avg)
+                else:
+                    # pyrefly: ignore [unsupported-operation]
+                    avg = test_metrics_sums[metric] / max(num_test_batches, 1)
+                    history[f'test_{metric}'].append(avg)
 
             # Affichage
-            t = history['train_total'][-1]
-            p = history['train_presence'][-1]
-            a = history['train_attr'][-1]
-            r = history['train_recon'][-1]
-            v = history['val_total'][-1]
-            print(
-                f"Epoque {epoch+1}/{epochs} - "
-                f"Train: {t:.4f} (p={p:.4f} a={a:.4f} r={r:.4f}) - "
-                f"Val: {v:.4f}"
-            )
+            string_to_print = 'Train (Test) losses: '
+            for key in train_loss_sums:
+                t = history[f'train_loss_{key}'][-1]
+                v = history[f'test_loss_{key}'][-1]
+                string_to_print += f"{key}: {t:.4f} ({v:.4f}) - "
+            string_to_print +="\n Train (Test) Metrics :"
+            if verbose:
+                for metric in test_metrics_sums:
+                    if self.metrics_detials:
+                        metric_dict = test_metrics_sums[metric]
+                        for attribute in metric_dict.keys():
+                            t = history[f'train_{metric}_{attribute}'][-1]
+                            v = history[f'test_{metric}_{attribute}'][-1]
+                            string_to_print += f"{attribute}: {t:.4f} ({v:.4f}) - "
+                    else:
+                        t = history[f'train_{metric}'][-1]
+                        v = history[f'test_{metric}'][-1]
+                        string_to_print += f"{metric}: {t:.4f} ({v:.4f}) - "
+            print(f"Epoque {epoch+1}/{epochs}: \n- {string_to_print}")
 
             # Checkpoint toutes les 5 époques
             if checkpoint_dir and (epoch + 1) % 5 == 0:
@@ -175,17 +263,17 @@ class Trainer:
 
         return history
 
-    def evaluate(self, test_loader):
+    def evaluate(self, val_dataloader):
         """
-        Évalue le modèle sur un jeu de test et calcule des métriques détaillées.
+        evaluate the model on a val dataset and calculate detailed metrics.
 
-        Paramètres
-        ----------
-        test_loader : DataLoader
-            Chargeur de données de test.
+        Args
+        ----
+        val_dataloader : DataLoader
+            val dataset loader.
 
-        Retourne
-        --------
+        Returns
+        -------
         dict
             Métriques : 'loss_total', 'loss_presence', 'loss_attr', 'loss_recon',
             'presence_accuracy', 'type_accuracy', 'size_mae', 'color_mae', 'angle_mae',
