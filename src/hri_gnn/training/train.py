@@ -16,23 +16,23 @@ matplotlib.use('Agg')  # Backend non-interactif pour la sauvegarde d'images
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
-from models.encoder_decoder import RavenEncoderDecoder
-from data.raven_dataset import RavenDataset
-from losses.composite_loss import CompositeLoss
-from training.trainer import Trainer
+# from models.encoder_decoder import RavenEncoderDecoder
+# from data.raven_dataset import RavenDataset
+# from losses.composite_loss import CompositeLoss
+# from training.trainer import Trainer
 
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
 
-DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "raw")
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "outputs")
+# DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "raw")
+# OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "outputs")
 
-EPOCHS = 20
-BATCH_SIZE = 64
-LEARNING_RATE = 1e-4
-LIMIT_PER_CONFIG = 200  # Fichiers NPZ par configuration (None = tout)
+# EPOCHS = 20
+# BATCH_SIZE = 64
+# LEARNING_RATE = 1e-4
+# LIMIT_PER_CONFIG = 200  # Fichiers NPZ par configuration (None = tout)
 
 
 # =============================================================================
@@ -53,14 +53,89 @@ def plot_learning_curves(history, save_path):
     epochs = range(1, len(history['train_total']) + 1)
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), facecolor='#1a1a2e')
-    fig.suptitle("Courbes d'apprentissage — RavenEncoderDecoder",
+    fig.suptitle("Learning curves — RavenCnnEncoder",
                  fontsize=16, fontweight='bold', color='#e0e0e0', y=0.98)
 
-    titres = [
-        ('total', 'Perte Totale'),
-        ('presence', 'Perte Présence (BCE)'),
-        ('attr', 'Perte Attributs (CE + MSE)'),
-        ('recon', 'Perte Reconstruction (MSE)')
+    # plots the attributes loss curves, a 3x2 plot :
+    # (1,1) train + test loss_type, (1,2) train + test loss_size, 
+    # (2,1) train + test loss_color, (2,2) train + test loss_angle
+    # (3,1) train loss for all attributes, (3,2) test loss for all attributes
+
+    fig, axes = plt.subplots(3, 2, figsize=(14, 10), facecolor='#1a1a2e')
+    fig.suptitle("Detailed Loss Curves - RavenCnnEncoder", fontsize=16, fontweight='bold', color='#e0e0e0', y=0.98)
+    
+    # plot the overall loss curves
+    fig, ax = plt.subplots(figsize=(14, 10), facecolor='#1a1a2e')
+    ax.plot(epochs, history['train_loss'], color='blue', label='Train Loss')
+    ax.plot(epochs, history['test_loss'], color='red', label='Test Loss')
+    ax.set_title('Overall Loss Curves')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.legend()
+    plt.show()
+
+    
+    
+
+
+
+    overall_loss_titles = [
+        ('train_loss', 'Overall train Loss'),
+        ('test_loss', 'Overall test Loss')
+    ]
+
+    detailed_loss_titles = [
+        ('train_loss_type', 'Type attribute train Loss'),
+        ('test_loss_type', 'Type attribute test Loss'),
+        ('train_loss_size', 'Size attribute train Loss'),
+        ('test_loss_size', 'Size attribute test Loss'),
+        ('train_loss_color', 'Color attribute train Loss'),
+        ('test_loss_color', 'Color attribute test Loss'),
+        ('train_loss_angle', 'Angle attribute train Loss'),
+        ('test_loss_angle', 'Angle attribute test Loss')
+    ]
+
+    titles = [
+        ('train_accuracy', 'Overall train Accuracy'),
+        ('test_accuracy', 'Overall test Accuracy'),
+        ('train_accuracy_type', 'Type attribute train Accuracy'),
+        ('test_accuracy_type', 'Type attribute test Accuracy'),
+        ('train_accuracy_size', 'Size attribute train Accuracy'),
+        ('test_accuracy_size', 'Size attribute test Accuracy'),
+        ('train_accuracy_color', 'Color attribute train Accuracy'),
+        ('test_accuracy_color', 'Color attribute test Accuracy'),
+        ('train_accuracy_angle', 'Angle attribute train Accuracy'),
+        ('test_accuracy_angle', 'Angle attribute test Accuracy'),
+        ('train_precision', 'Overall train precision'),
+        ('test_precision', 'Overall test precision'),
+        ('train_precision_type', 'Type attribute train precision'),
+        ('test_precision_type', 'Type attribute test precision'),
+        ('train_precision_size', 'Size attribute train precision'),
+        ('test_precision_size', 'Size attribute test precision'),
+        ('train_precision_color', 'Color attribute train precision'),
+        ('test_precision_color', 'Color attribute test precision'),
+        ('train_precision_angle', 'Angle attribute train precision'),
+        ('test_precision_angle', 'Angle attribute test precision'),
+        ('train_recall', 'Overall train recall'),
+        ('test_recall', 'Overall test recall'),
+        ('train_recall_type', 'Type attribute train recall'),
+        ('test_recall_type', 'Type attribute test recall'),
+        ('train_recall_size', 'Size attribute train recall'),
+        ('test_recall_size', 'Size attribute test recall'),
+        ('train_recall_color', 'Color attribute train recall'),
+        ('test_recall_color', 'Color attribute test recall'),
+        ('train_recall_angle', 'Angle attribute train recall'),
+        ('test_recall_angle', 'Angle attribute test recall'),
+        ('train_f1', 'Overall train f1'),
+        ('test_f1', 'Overall test f1'),
+        ('train_f1_type', 'Type attribute train f1'),
+        ('test_f1_type', 'Type attribute test f1'),
+        ('train_f1_size', 'Size attribute train f1'),
+        ('test_f1_size', 'Size attribute test f1'),
+        ('train_f1_color', 'Color attribute train f1'),
+        ('test_f1_color', 'Color attribute test f1'),
+        ('train_f1_angle', 'Angle attribute train f1'),
+        ('test_f1_angle', 'Angle attribute test f1')
     ]
 
     for ax, (key, titre) in zip(axes.flat, titres):

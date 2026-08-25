@@ -22,13 +22,14 @@ class Trainer:
         The device (CPU or GPU).
     """
 
-    def __init__(self, model: nn.Module, optimizer:torch.optim.Optimizer, criterion:nn.Module, metrics= METRICS, metrics_detials= False, device= None):
+    def __init__(self, model: nn.Module, optimizer:torch.optim.Optimizer, criterion:nn.Module, metrics= METRICS, metrics_detials= False, loss_details = False, device= None):
         self.model = model
         # self.dataloader = dataloader
         self.optimizer = optimizer
         self.criterion = criterion
         self.metrics = metrics
         self.metrics_detials = metrics_detials
+        self.loss_details = loss_details
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             print(f"No device provided, Trainer will use: {self.device}")
@@ -37,9 +38,9 @@ class Trainer:
             print(f"Device provided, Trainer will use: {self.device}")
 
         # Initialize metrics
-        self.composite_metrics = CompositeMetric(metric_names=self.metrics, details=self.metrics_detials, device=device)
+        self.composite_metrics = CompositeMetric(metric_names=self.metrics, device=device)
 
-    def train_step(self, X_train, y_train):
+    def train_step(self, batch):
         """
         Execute a training step on a batch.
 
@@ -52,6 +53,10 @@ class Trainer:
         --------
         dict of the losses and metrics
         """
+
+        # unpack the batch
+        X_train, y_train = batch[0], batch[1]
+
         # set the model to train mode
         self.model.train()
 
@@ -69,16 +74,20 @@ class Trainer:
         losses = self.criterion(logits, y_train)
         # compute metrics
         metrics = self.composite_metrics.compute(logits, y_train)
-        composite_loss = losses['composit']
+        composite_loss = losses['loss']
 
         # backward pass
         composite_loss.backward()
         # update the weights
         self.optimizer.step()
+        
+        train_step_output = {}
+        train_step_output.update(losses)
+        train_step_output.update(metrics)
 
-        return {"losses": losses, "metrics": metrics}
+        return train_step_output
 
-    def test_step(self, X_test, y_test):
+    def test_step(self,batch):
         """
         Execute an test step on a batch (without gradients).
 
@@ -91,6 +100,7 @@ class Trainer:
         -------
         dict of the losses and metrics
         """
+        X_test, y_test = batch[0], batch[1]
         # set the model to eval mode
         self.model.eval()
         # move the data to the device (device agnostic code)
@@ -103,12 +113,13 @@ class Trainer:
             losses = self.criterion(logits, y_test)
             metrics = self.composite_metrics.compute(logits, y_test)
 
-        return {
-            "losses": losses, 
-            "metrics": metrics
-        }
+        test_step_output = {}
+        test_step_output.update(losses)
+        test_step_output.update(metrics)
 
-    def fit(self, train_dataloader, test_dataloader, epochs, checkpoint_dir=None, verbose=True):
+        return test_step_output
+
+    def fit(self, train_dataloader, test_dataloader, epochs, checkpoint_dir=None, checkpoint_epochs=5, verbose=True):
         """
         Complete training loop over several epochs.
 
@@ -131,220 +142,245 @@ class Trainer:
             'test_total', 'test_type', 'test_size', 'test_color', 'test_angle'
             Each value is a list of floats (one per epoch).
         """
-        history = {
-            'train_loss_composit': [], 'train_loss_type': [], 'train_loss_size': [], 'train_loss_color': [], 'train_loss_angle': [],
-            'test_loss_composit': [], 'test_loss_type': [], 'test_loss_size': [], 'test_loss_color': [], 'test_loss_angle': []
-        }
+        # initialize history
+        history = {}
+        # history['train_number_of_crops'] = []
+        # history['test_number_of_crops'] = []
+        # history['train_number_of_batches'] = []
+        # history['test_number_of_batches'] = []
+        history[f"train_loss"] = []
+        history[f"test_loss"] = []
+        if self.loss_details:
+            for attribute in ENTITY_ATTRIBUTES.keys():
+                history[f"train_loss_{attribute}"] = []
+                history[f"test_loss_{attribute}"] = []
         for metric in self.metrics:
+            history[f"train_{metric}"] = []
+            history[f"test_{metric}"] = []
             if self.metrics_detials:
-                for attribute in {"overall"} | ENTITY_ATTRIBUTES.keys():
+                for attribute in ENTITY_ATTRIBUTES.keys():
                     history[f"train_{metric}_{attribute}"] = []
                     history[f"test_{metric}_{attribute}"] = []
-            else:
-                history[f"train_{metric}"] = []
-                history[f"test_{metric}"] = []
 
-
+        num_train_crops = 0
+        num_test_crops = 0
         
-
         for epoch in tqdm(range(epochs)):
-            # --- Entraînement ---
-            train_loss_sums = {'composit': 0.0, 'type': 0.0, 'size': 0.0, 'color': 0.0, 'angle':0.0}
-            if self.metrics_detials:
-                train_metrics_sums = {metric:{attribute:0.0 for attribute in {"overall"} | ENTITY_ATTRIBUTES.keys()} for metric in self.metrics}
-            else:
-                train_metrics_sums = {metric: 0.0 for metric in self.metrics}
-            num_train_batches = 0
 
-            for batch in train_dataloader:
-                X_train, y_train = batch[0], batch[1]
-                step_output = self.train_step(X_train, y_train)
+            # --- Training ---
+
+            # initialize the training loss sums
+            train_loss_sums = {'loss': 0.0}
+            if self.loss_details:
+                for attribute in ENTITY_ATTRIBUTES.keys():
+                    train_loss_sums[f'loss_{attribute}'] = 0.0
+            
+            # initialize the training metrics sums
+            train_metrics_sums = {metric:0.0 for metric in self.metrics}
+            if self.metrics_detials:
+                 train_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
+                
+            # start the trianing loop
+            for train_batch_id, train_batch in enumerate(train_dataloader):
+            
+                # execute the training step
+                step_output = self.train_step(train_batch)
+
+                # update the loss sums
                 for key in train_loss_sums.keys():
-                    train_loss_sums[key] += step_output["losses"][key]
+                    train_loss_sums[key] += step_output[key].item()
                 
-                for metric in train_metrics_sums.keys():
-                    if self.metrics_detials:
-                        # pyrefly: ignore [not-iterable]
-                        for attribute in train_metrics_sums[metric].keys():
-                            train_metrics_sums[metric][attribute] += step_output["metrics"][metric][attribute]
-                    else:
-                        # pyrefly: ignore [unsupported-operation]
-                        train_metrics_sums[metric] += step_output["metrics"][metric]
+                # update the metrics sums
+                for key in train_metrics_sums.keys():
+                    train_metrics_sums[key] += step_output[key]
                         
-                num_train_batches += 1
+                # keep track of the number of crops
+                if epoch == 0:
+                    num_train_crops += train_batch[0].size(0)
+            
+            if epoch == 0:
+                # add num_of_crops and num_of_batches to history
+                # pyrefly: ignore [unsupported-operation]
+                history['train_number_of_crops']= num_train_crops
+                # pyrefly: ignore [unsupported-operation]
+                history['train_number_of_batches']= train_batch_id+1
 
-            # Moyennes d'entraînement
+            # training averages
             for key in train_loss_sums:
-                avg = train_loss_sums[key] / max(num_train_batches, 1)
-                history[f'train_loss_{key}'].append(avg)
+                train_epoch_avg_loss = train_loss_sums[key] / (train_batch_id+1)
+                history[f'train_{key}'].append(train_epoch_avg_loss)
 
-            for metric in train_metrics_sums:
-                if self.metrics_detials:
-                    # pyrefly: ignore [not-iterable]
-                    for attribute in train_metrics_sums[metric]:
-                        # pyrefly: ignore [not-iterable]
-                        avg = train_metrics_sums[metric][attribute] / max(num_train_batches, 1)
-                        history[f'train_{metric}_{attribute}'].append(avg)
-                else:
-                    # pyrefly: ignore [unsupported-operation]
-                    avg = train_metrics_sums[metric] / max(num_train_batches, 1)
-                    history[f'train_{metric}'].append(avg)
+            for key in train_metrics_sums:
+                train_epoch_avg_metric = train_metrics_sums[key] / (train_batch_id+1)
+                history[f'train_{key}'].append(train_epoch_avg_metric)
 
-            # --- Test ---
-            test_sums = {'composit': 0.0, 'type': 0.0, 'size': 0.0, 'color': 0.0, 'angle':0.0}
+            # ----------Test----------
+            
+            # initialize the test loss sums
+            test_loss_sums = {'loss': 0.0}
+            if self.loss_details:
+                for attribute in ENTITY_ATTRIBUTES.keys():
+                    test_loss_sums[f'loss_{attribute}'] = 0.0
+            # initialize the test metrics sums
+            test_metrics_sums = {metric:0.0 for metric in self.metrics}
             if self.metrics_detials:
-                test_metrics_sums = {metric:{attribute:0.0 for attribute in {"overall"} | ENTITY_ATTRIBUTES.keys()} for metric in self.metrics}
-            else:
-                test_metrics_sums = {metric: 0.0 for metric in self.metrics}
-            num_test_batches = 0
-
-            for batch in test_dataloader:
-                X_test, y_test = batch[0], batch[1]
-                test_output = self.test_step(X_test, y_test)
-                for key in test_sums:
-                    test_sums[key] += test_output["losses"][key]
+                 test_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
                 
+            for test_batch_id, test_batch in enumerate(test_dataloader):
+                test_output = self.test_step(test_batch)
+                
+                # update the test loss sums
+                for key in test_loss_sums.keys():
+                    test_loss_sums[key] += test_output[key].item()
+                
+                # update the test metrics sums
                 for metric in test_metrics_sums.keys():
-                    if self.metrics_detials:
-                        # pyrefly: ignore [not-iterable]
-                        for attribute in test_metrics_sums[metric].keys():
-                            test_metrics_sums[metric][attribute] += test_output["metrics"][metric][attribute]
-                    else:
-                        # pyrefly: ignore [unsupported-operation]
-                        test_metrics_sums[metric] += test_output["metrics"][metric]
-                        
-                num_test_batches += 1
+                    test_metrics_sums[metric] += test_output[metric]
+                
+                # keep track of the number of crops
+                if epoch == 0:
+                    num_test_crops += test_batch[0].size(0)
+            
+            if epoch == 0:
+                # add num_of_crops and num_of_batches to history
+                # pyrefly: ignore [unsupported-operation]
+                history['test_number_of_crops'] =num_test_crops
+                # pyrefly: ignore [unsupported-operation]
+                history['test_number_of_batches'] =test_batch_id+1
 
-            # Moyennes de validation
-            for key in test_sums:
-                avg = test_sums[key] / max(num_test_batches, 1)
-                history[f'test_loss_{key}'].append(avg)
-
-            for metric in test_metrics_sums:
-                if self.metrics_detials:
-                    # pyrefly: ignore [not-iterable]
-                    for attribute in test_metrics_sums[metric].keys():
-                        # pyrefly: ignore [not-iterable]
-                        avg = test_metrics_sums[metric][attribute] / max(num_test_batches, 1)
-                        history[f'test_{metric}_{attribute}'].append(avg)
-                else:
-                    # pyrefly: ignore [unsupported-operation]
-                    avg = test_metrics_sums[metric] / max(num_test_batches, 1)
-                    history[f'test_{metric}'].append(avg)
+            # test averages
+            for key in test_loss_sums.keys():
+                test_avg_loss = test_loss_sums[key] / (test_batch_id+1)
+                history[f'test_{key}'].append(test_avg_loss)
+            
+            for metric in test_metrics_sums.keys():
+                test_avg_metric = test_metrics_sums[metric] / (test_batch_id+1)
+                history[f'test_{metric}'].append(test_avg_metric)
 
             # Affichage
-            string_to_print = 'Train (Test) losses: '
+            #string_to_print = f"- Train (Test) number of batches: {train_batch_id+1} ({test_batch_id+1})\n"
+            #string_to_print += f"- Train (Test) number of crops: {num_train_crops} ({num_test_crops})\n"
+            string_to_print = "- Train (Test) losses: "
             for key in train_loss_sums:
-                t = history[f'train_loss_{key}'][-1]
-                v = history[f'test_loss_{key}'][-1]
+                t = history[f'train_{key}'][-1]
+                v = history[f'test_{key}'][-1]
                 string_to_print += f"{key}: {t:.4f} ({v:.4f}) - "
-            string_to_print +="\n Train (Test) Metrics :"
-            if verbose:
-                for metric in test_metrics_sums:
-                    if self.metrics_detials:
-                        metric_dict = test_metrics_sums[metric]
-                        for attribute in metric_dict.keys():
-                            t = history[f'train_{metric}_{attribute}'][-1]
-                            v = history[f'test_{metric}_{attribute}'][-1]
-                            string_to_print += f"{attribute}: {t:.4f} ({v:.4f}) - "
-                    else:
-                        t = history[f'train_{metric}'][-1]
-                        v = history[f'test_{metric}'][-1]
-                        string_to_print += f"{metric}: {t:.4f} ({v:.4f}) - "
-            print(f"Epoque {epoch+1}/{epochs}: \n- {string_to_print}")
+            
 
-            # Checkpoint toutes les 5 époques
-            if checkpoint_dir and (epoch + 1) % 5 == 0:
+            # add metrics to the string to print
+            if verbose:
+                string_to_print +="\n- Train (Test) Metrics :"
+                for key in train_metrics_sums.keys():
+                    t = history[f'train_{key}'][-1]
+                    v = history[f'test_{key}'][-1]
+                    string_to_print += f"{key}: {t:.4f} ({v:.4f}) - "
+            
+            # Print final string
+            print(f"Epoque {epoch+1}/{epochs}: \n{string_to_print}")
+
+            # Save a checkpoint every 'checkpoint_epochs'
+            if checkpoint_dir and (epoch + 1) % checkpoint_epochs == 0:
                 import os
                 os.makedirs(checkpoint_dir, exist_ok=True)
                 path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth")
                 torch.save(self.model.state_dict(), path)
-                print(f"  > Checkpoint sauvegarde : {path}")
+                print(f"  > Checkpoint saved: {path}")
+
+        # end of training print  
+        output_string = "\nTraining finished!....\n"
+        output_string += f"Train (Test) number of crops: {history['train_number_of_crops']} ({history['test_number_of_crops']})"
+        output_string += f"Train (Test) number of batches: {history['train_number_of_batches']} ({history['test_number_of_batches']})"
+        print(output_string)
 
         return history
 
-    def evaluate(self, val_dataloader):
+    def validate(self, val_dataloader):
         """
-        evaluate the model on a val dataset and calculate detailed metrics.
+        validate the model on a validation dataloader and calculate detailed metrics.
 
-        Args
+        Args    
         ----
         val_dataloader : DataLoader
-            val dataset loader.
+            validation dataloader.
 
         Returns
         -------
         dict
-            Métriques : 'loss_total', 'loss_presence', 'loss_attr', 'loss_recon',
-            'presence_accuracy', 'type_accuracy', 'size_mae', 'color_mae', 'angle_mae',
-            'recon_mse'
+            - 'loss': composite loss
+            - 'type_loss': type loss
+            - 'size_loss': size loss
+            - 'color_loss': color loss
+            - 'angle_loss': angle loss 
+            - 'accuracy': overall accuracy
+            - 'accuracy_type': type accuracy
+            - 'accuracy_size': size accuracy
+            - 'accuracy_color': color accuracy
+            - 'accuracy_angle': angle accuracy
+            - 'accuracy': overall accuracy
+            - 'precision': overall precision 
+            - 'precision_type': type precision
+            - 'precision_size': size precision
+            - 'precision_color': color precision
+            - 'precision_angle': angle precision
+            - 'precision': overall precision
+            - 'recall': overall recall 
+            - 'recall_type': type recall
+            - 'recall_size': size recall
+            - 'recall_color': color recall
+            - 'recall_angle': angle recall
+            - 'recall': overall recall
+            - 'f1_score': overall f1-score
+            - 'f1_type': type f1-score
+            - 'f1_size': size f1-score
+            - 'f1_color': color f1-score
+            - 'f1_angle': angle f1-score
+            - 'f1': overall f1-score
+            - 'num_of_crops': number of crops
+            - 'num_of_batches': number of batches
         """
         self.model.eval()
 
-        # Accumulateurs pour les pertes
-        loss_sums = {'total': 0.0, 'presence': 0.0, 'attr': 0.0, 'recon': 0.0}
+        # accumulators for loss
+        loss_sums = {'loss': 0.0}
+        if self.loss_details:
+            for attribute in ENTITY_ATTRIBUTES.keys():
+                loss_sums[f'loss_{attribute}'] = 0.0
+        # accumulators for metrics
+        metrics_sums = {metric:0.0 for metric in self.metrics}
+        if self.metrics_detials:
+            metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
         num_batches = 0
+        num_crops = 0
 
-        # Accumulateurs pour les métriques
-        presence_correct = 0
-        presence_total = 0
-        type_correct = 0
-        type_total = 0
-        size_ae_sum = 0.0
-        color_ae_sum = 0.0
-        angle_ae_sum = 0.0
-        regression_count = 0
-        recon_mse_sum = 0.0
-        recon_count = 0
+        self.model.eval()
+        with torch.inference_mode():
+            for batch in tqdm(val_dataloader, desc="Validating the model..."):
+                X_val, y_val = batch[0].to(self.device), batch[1].to(self.device)
+                logits = self.model(X_val)
 
-        with torch.no_grad():
-            for batch in test_loader:
-                images, targets = batch[0].to(self.device), batch[1].to(self.device)
-                pred_z, pred_img = self.model(images)
-
-                # Pertes
-                losses = self.criterion(pred_z, pred_img, targets, images)
+                # losses
+                losses = self.criterion(logits,y_val)
                 for key in loss_sums:
                     loss_sums[key] += losses[key].item()
+                
+                # metrics
+                metrics = self.composite_metrics.compute(logits, y_val)
+                for key in metrics_sums:
+                    metrics_sums[key] += metrics[key]
+
                 num_batches += 1
+                num_crops += X_val.size(0)
 
-                # --- Métriques de présence ---
-                pred_presence = (torch.sigmoid(pred_z[:, :, 0]) > 0.5).float()
-                target_presence = targets[:, :, 0]
-                presence_correct += (pred_presence == target_presence).sum().item()
-                presence_total += target_presence.numel()
+        results = {}
+        # add losses to results
+        for key in loss_sums:
+            results[f'val_{key}'] = loss_sums[key] / max(num_batches, 1)
 
-                # --- Métriques sur les slots actifs ---
-                mask = (target_presence == 1)
-                if mask.any():
-                    # Précision du type (argmax sur colonnes 2:8)
-                    pred_types = pred_z[mask][:, 2:8].argmax(dim=1)
-                    target_types = targets[mask][:, 2:8].argmax(dim=1)
-                    type_correct += (pred_types == target_types).sum().item()
-                    type_total += target_types.numel()
+        # add metrics to results
+        for metric in metrics_sums:
+            results[f'val_{metric}'] = metrics_sums[metric] / max(num_batches, 1)
+        
+        results['val_num_of_crops'] = num_crops
+        results['val_num_of_batches'] = num_batches
 
-                    # MAE des attributs de régression
-                    pred_attrs = torch.sigmoid(pred_z[mask])
-                    size_ae_sum += (pred_attrs[:, 8] - targets[mask][:, 8]).abs().sum().item()
-                    color_ae_sum += (pred_attrs[:, 9] - targets[mask][:, 9]).abs().sum().item()
-                    angle_ae_sum += (pred_attrs[:, 12] - targets[mask][:, 12]).abs().sum().item()
-                    regression_count += mask.sum().item()
-
-                # Reconstruction MSE
-                recon_mse_sum += F.mse_loss(pred_img, images, reduction='sum').item()
-                recon_count += images.numel()
-
-        metrics = {
-            'loss_total': loss_sums['total'] / max(num_batches, 1),
-            'loss_presence': loss_sums['presence'] / max(num_batches, 1),
-            'loss_attr': loss_sums['attr'] / max(num_batches, 1),
-            'loss_recon': loss_sums['recon'] / max(num_batches, 1),
-            'presence_accuracy': presence_correct / max(presence_total, 1),
-            'type_accuracy': type_correct / max(type_total, 1),
-            'size_mae': size_ae_sum / max(regression_count, 1),
-            'color_mae': color_ae_sum / max(regression_count, 1),
-            'angle_mae': angle_ae_sum / max(regression_count, 1),
-            'recon_mse': recon_mse_sum / max(recon_count, 1),
-        }
-
-        return metrics
+        return results

@@ -1,3 +1,4 @@
+from torch import Tensor
 import time
 import torch
 import torch.nn as nn
@@ -7,10 +8,9 @@ from hri_gnn.config.const import ENTITY_ATTRIBUTES, METRICS
 
 
 class CompositeMetric:
-    def __init__(self, metric_names: list[str]=METRICS, details=False ,device=None):
+    def __init__(self, metric_names: list[str]=METRICS, device=None):
         super().__init__()
         self.metric_names = metric_names
-        self.details = details
         if device:
           self.device = device
         else:
@@ -56,13 +56,13 @@ class CompositeMetric:
 
       Returns
       -------
-      dict: A dictionary with the accuracy for each attribute
+      list: A list with the accuracy for each attribute (overal at the end)
       """
       accuracy_dict = {}
       for attribute, accuracy_fn in self._accuracy_fn_dict.items():
-        accuracy_dict[attribute] = accuracy_fn(predictions[attribute], targets[attribute])
-      accuracy = torch.mean(torch.tensor(list(accuracy_dict.values())))
-      accuracy_dict["overall"] = accuracy
+        acc_attr_val = accuracy_fn(predictions[attribute], targets[attribute]).item()
+        accuracy_dict[f"accuracy_{attribute}"] = acc_attr_val
+      accuracy_dict["accuracy"] = sum(accuracy_dict.values())/len(accuracy_dict)
       return accuracy_dict
 
     def _create_precision_functions(self):
@@ -81,9 +81,9 @@ class CompositeMetric:
       """
       precision_dict = {}
       for attribute, precision_fn in self._precision_fn_dict.items():
-        precision_dict[attribute] = precision_fn(predictions[attribute], targets[attribute])
-      precision = torch.mean(torch.tensor(list(precision_dict.values())))
-      precision_dict["overall"] = precision
+        precision_attr_val = precision_fn(predictions[attribute], targets[attribute]).item()
+        precision_dict[f"precision_{attribute}"] = precision_attr_val
+      precision_dict["precision"] = sum(precision_dict.values())/len(precision_dict)
       return precision_dict
 
     def _create_recall_functions(self):
@@ -101,9 +101,9 @@ class CompositeMetric:
       """
       recall_dict = {}
       for attribute, recall_fn in self._recall_fn_dict.items():
-        recall_dict[attribute] = recall_fn(predictions[attribute], targets[attribute])
-      recall = torch.mean(torch.tensor(list(recall_dict.values())))
-      recall_dict["overall"] = recall
+        recall_attr_val = recall_fn(predictions[attribute], targets[attribute]).item()
+        recall_dict[f"recall_{attribute}"] = recall_attr_val
+      recall_dict["recall"] = sum(recall_dict.values())/len(recall_dict)
       return recall_dict
 
     def _create_f1_functions(self):
@@ -121,9 +121,9 @@ class CompositeMetric:
       """
       f1_dict = {}
       for attribute, f1_fn in self._f1_fn_dict.items():
-        f1_dict[attribute] = f1_fn(predictions[attribute], targets[attribute])
-      f1 = torch.mean(torch.tensor(list(f1_dict.values())))
-      f1_dict["overall"] = f1
+        f1_attr_val = f1_fn(predictions[attribute], targets[attribute]).item()
+        f1_dict[f"f1_{attribute}"] = f1_attr_val
+      f1_dict["f1"] = sum(f1_dict.values())/len(f1_dict)
       return f1_dict
 
     def compute(self, pred_logits, y_true):
@@ -135,17 +135,14 @@ class CompositeMetric:
       for metric in self.metric_names:
         match metric:
           case 'accuracy':
-            results[metric] = self._compute_accuracy(predictions,targets)
+            results.update(self._compute_accuracy(predictions,targets))
           case 'precision':
-            results[metric] = self._compute_precision(predictions,targets)
+            results.update(self._compute_precision(predictions,targets))
           case 'recall':
-            results[metric] = self._compute_recall(predictions,targets)
+            results.update(self._compute_recall(predictions,targets))
           case 'f1':
-            results[metric] = self._compute_f1(predictions,targets)
-      if self.details:
-        return results
-      else:
-        return {metric: results[metric]["overall"] for metric in self.metric_names}
+            results.update(self._compute_f1(predictions,targets))
+      return results
 
 
 class TrainingTimer:
@@ -158,16 +155,16 @@ class TrainingTimer:
     """
     def __init__(self, model:nn.Module):
       self.model = model
-      self.device = next(model.parameters()).device
 
     def __enter__(self):
-      print(f"start training model of type: '{self.model.__class__.__name__}' on device: {self.device} ....")
+      print(f"start training model: {self.model.__class__.__name__}...")
       self.start = time.perf_counter()
       return self  # This object is bound to the 'as' variable
 
     def __exit__(self, exc_type, exc_val, exc_tb):
       self.end = time.perf_counter()
       self.elapsed = self.end - self.start
-      print(f"training model of type '{self.model.__class__.__name__}' on device: {self.device}, took: {self.elapsed:.4f} seconds")
+      minutes, secs = divmod(self.elapsed, 60)
+      print(f"{self.model.__class__.__name__} training session took: {int(minutes)}m {int(secs)}s")
       return False
 

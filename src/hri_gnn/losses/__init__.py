@@ -59,9 +59,9 @@ class CompositeLoss(nn.Module):
         composite_loss = loss_type + loss_size + loss_color + loss_angle
 
         return {
-            "composit":composite_loss, 
-            "type":loss_type, 
-            "size":loss_size, 
-            "color":loss_color, 
-            "angle":loss_angle
+            "loss":composite_loss, 
+            "loss_type":loss_type, 
+            "loss_size":loss_size, 
+            "loss_color":loss_color, 
+            "loss_angle":loss_angle
         }
