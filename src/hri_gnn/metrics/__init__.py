@@ -2,27 +2,24 @@ from torch import Tensor
 import time
 import torch
 import torch.nn as nn
-from torchmetrics.classification import MulticlassAccuracy,MulticlassPrecision,MulticlassRecall,MulticlassF1Score
+from torchmetrics.classification import MulticlassAccuracy,MulticlassPrecision,MulticlassRecall,MulticlassF1Score,MulticlassConfusionMatrix
 
 from hri_gnn.config.const import ENTITY_ATTRIBUTES, METRICS
 
 
 class CompositeMetric:
-    def __init__(self, metric_names: list[str]=METRICS, device=None):
+    def __init__(self, metrics_names: list[str]=METRICS, metrics_detailed= True, device="cpu"):
         super().__init__()
-        self.metric_names = metric_names
-        if device:
-          self.device = device
-        else:
-          self.device = "cuda" if torch.cuda.is_available() else "cpu"
-          print(f"No device was specified, CompositeMetric is setting device to: {self.device}")
+        self.metrics_names = metrics_names
+        self.device = device
+        self.metrics_detailed = metrics_detailed
 
         # Check for supported metrics
-        unsupprted_metrics = set(self.metric_names) - set(METRICS)
+        unsupprted_metrics = set(self.metrics_names) - set(METRICS)
         if unsupprted_metrics:
           raise ValueError(f"{unsupprted_metrics} are not supported. Supported metrics: {METRICS}")
 
-        for metric in set(metric_names):
+        for metric in set(self.metrics_names):
           match metric:
             case 'accuracy':
               self._create_accuracy_functions()
@@ -32,9 +29,17 @@ class CompositeMetric:
               self._create_recall_functions()
             case 'f1':
               self._create_f1_functions()
+            case 'confusion_matrix':
+              self._create_confusion_matrix_functions()
             case _:
               raise ValueError(f"Unknown metric: {metric}")
     
+    def is_metrics_detailed(self):
+      return self.metrics_detailed
+    
+    def get_metrics_names(self):
+      return self.metrics_names
+      
     def _convert_logits_to_pred(self, pred_logits):
       pred_type = pred_logits['pred_type_logits'].argmax(dim=1)
       pred_size = pred_logits['pred_size_logits'].argmax(dim=1)
@@ -63,7 +68,10 @@ class CompositeMetric:
         acc_attr_val = accuracy_fn(predictions[attribute], targets[attribute]).item()
         accuracy_dict[f"accuracy_{attribute}"] = acc_attr_val
       accuracy_dict["accuracy"] = sum(accuracy_dict.values())/len(accuracy_dict)
-      return accuracy_dict
+      if self.metrics_detailed:
+        return accuracy_dict
+      else:
+        return {"accuracy": accuracy_dict["accuracy"]}
 
     def _create_precision_functions(self):
       self._precision_fn_dict = {}
@@ -84,7 +92,10 @@ class CompositeMetric:
         precision_attr_val = precision_fn(predictions[attribute], targets[attribute]).item()
         precision_dict[f"precision_{attribute}"] = precision_attr_val
       precision_dict["precision"] = sum(precision_dict.values())/len(precision_dict)
-      return precision_dict
+      if self.metrics_detailed:
+        return precision_dict
+      else:
+        return {"precision": precision_dict["precision"]}
 
     def _create_recall_functions(self):
       self._recall_fn_dict = {}
@@ -104,7 +115,10 @@ class CompositeMetric:
         recall_attr_val = recall_fn(predictions[attribute], targets[attribute]).item()
         recall_dict[f"recall_{attribute}"] = recall_attr_val
       recall_dict["recall"] = sum(recall_dict.values())/len(recall_dict)
-      return recall_dict
+      if self.metrics_detailed:
+        return recall_dict
+      else:
+        return {"recall": recall_dict["recall"]}
 
     def _create_f1_functions(self):
       self._f1_fn_dict = {}
@@ -124,15 +138,40 @@ class CompositeMetric:
         f1_attr_val = f1_fn(predictions[attribute], targets[attribute]).item()
         f1_dict[f"f1_{attribute}"] = f1_attr_val
       f1_dict["f1"] = sum(f1_dict.values())/len(f1_dict)
-      return f1_dict
+      if self.metrics_detailed:
+        return f1_dict
+      else:
+        return {"f1": f1_dict["f1"]}
 
+    def _create_confusion_matrix_functions(self):
+      self._confusion_matrix_fn_dict = {}
+      for attribute in ENTITY_ATTRIBUTES.keys():
+        self._confusion_matrix_fn_dict[attribute] = MulticlassConfusionMatrix(num_classes= len(ENTITY_ATTRIBUTES[attribute])).to(self.device)
+
+    def compute_confusion_matrix(self, pred_logits, y_true):
+      """
+      Compute the confusion matrix for each attribute.
+
+      Returns
+      -------
+      dict: A dictionary with the confusion matrix for each attribute
+      """
+      predictions = self._convert_logits_to_pred(pred_logits)
+      targets = self._create_targets_dict(y_true)
+      self._create_confusion_matrix_functions()
+      confusion_matrix_dict = {}
+      for attribute, confusion_matrix_fn in self._confusion_matrix_fn_dict.items():
+        confusion_matrix_attr_val = confusion_matrix_fn(predictions[attribute], targets[attribute])
+        confusion_matrix_dict[f"confusion_matrix_{attribute}"] = confusion_matrix_attr_val
+      return confusion_matrix_dict
+      
     def compute(self, pred_logits, y_true):
       
       predictions = self._convert_logits_to_pred(pred_logits)
       targets = self._create_targets_dict(y_true)
 
       results = {}
-      for metric in self.metric_names:
+      for metric in self.metrics_names:
         match metric:
           case 'accuracy':
             results.update(self._compute_accuracy(predictions,targets))
@@ -142,6 +181,8 @@ class CompositeMetric:
             results.update(self._compute_recall(predictions,targets))
           case 'f1':
             results.update(self._compute_f1(predictions,targets))
+          case 'confusion_matrix':
+            pass
       return results
 
 

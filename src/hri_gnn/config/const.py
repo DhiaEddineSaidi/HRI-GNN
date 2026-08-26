@@ -5,7 +5,8 @@
 from enum import Enum
 
 # RAVEN image size (in pixels)
-IMAGE_SIZE = 160
+INPUT_IMAGE_SIZE = 160
+OUTPUT_IMAGE_CROP_SIZE = 80
 
 # 7 figurative configurations of the RAVEN dataset
 class Configuration(Enum):
@@ -40,7 +41,7 @@ UNIFORMITY_VALUES = [False, False, False, True]
 # II. Entity attributes
 
 # Geometric shape types
-TYPE_VALUES       = ["none", "triangle", "square", "pentagon", "hexagon", "circle"]
+TYPE_VALUES       = ["triangle", "square", "pentagon", "hexagon", "circle"]
 
 # Sizes (scale factor)
 SIZE_VALUES       = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
@@ -63,4 +64,4 @@ RULE_ATTRIBUTES = ["Number/Position", "Type", "Size", "Color"]
 
 
 # Supported metrics
-METRICS = ["accuracy", "precision", "recall", "f1"]
+METRICS = ["accuracy", "precision", "recall", "f1", "confusion_matrix"]

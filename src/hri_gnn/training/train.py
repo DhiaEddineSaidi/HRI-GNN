@@ -1,181 +1,92 @@
 """
-Script principal d'entraînement de l'encodeur-décodeur RAVEN.
+Main script to train the cnn encoder model for the RAVEN dataset.
 
-Entraîne le modèle RavenEncoderDecoder sur toutes les configurations RAVEN,
-trace les courbes d'apprentissage et évalue les performances sur le jeu de test.
-
-Usage :
+Usage:
     python -m training.train
 """
-
-import os
+from hri_gnn.config.const import ENTITY_ATTRIBUTES
+import os 
 import json
+
 import torch
-import matplotlib
-matplotlib.use('Agg')  # Backend non-interactif pour la sauvegarde d'images
-import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
-# from models.encoder_decoder import RavenEncoderDecoder
-# from data.raven_dataset import RavenDataset
-# from losses.composite_loss import CompositeLoss
-# from training.trainer import Trainer
+from hri_gnn.datasets import RavenDataset
+from hri_gnn.models.cnn_encoder import RavenCnnEncoder
+from hri_gnn.losses import CompositeLoss
+from hri_gnn.metrics import CompositeMetric, TrainingTimer
+from hri_gnn.training.trainer import Trainer
+from hri_gnn.config.const import METRICS
+
+from hri_gnn.visualization import oracle
+
+from hri_gnn.utils import paths
+
+# import json
+
+# import matplotlib
+# matplotlib.use('Agg')  # Backend non-interactif pour la sauvegarde d'images
+# import matplotlib.pyplot as plt
 
 
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
+# from matplotlib.gridspec import GridSpec
+# from hri_gnn.config.const import ENTITY_ATTRIBUTES
+# from hri_gnn.utils.paths import get_output_path
 
-# DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "raw")
-# OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "outputs")
-
-# EPOCHS = 20
-# BATCH_SIZE = 64
-# LEARNING_RATE = 1e-4
-# LIMIT_PER_CONFIG = 200  # Fichiers NPZ par configuration (None = tout)
-
-
-# =============================================================================
-# FONCTIONS DE VISUALISATION
-# =============================================================================
-
-def plot_learning_curves(history, save_path):
-    """
-    Trace les courbes d'apprentissage (pertes) et les sauvegarde.
-
-    Paramètres
-    ----------
-    history : dict
-        Historique des pertes retourné par Trainer.fit().
-    save_path : str
-        Chemin pour sauvegarder l'image.
-    """
-    epochs = range(1, len(history['train_total']) + 1)
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10), facecolor='#1a1a2e')
-    fig.suptitle("Learning curves — RavenCnnEncoder",
-                 fontsize=16, fontweight='bold', color='#e0e0e0', y=0.98)
-
-    # plots the attributes loss curves, a 3x2 plot :
-    # (1,1) train + test loss_type, (1,2) train + test loss_size, 
-    # (2,1) train + test loss_color, (2,2) train + test loss_angle
-    # (3,1) train loss for all attributes, (3,2) test loss for all attributes
-
-    fig, axes = plt.subplots(3, 2, figsize=(14, 10), facecolor='#1a1a2e')
-    fig.suptitle("Detailed Loss Curves - RavenCnnEncoder", fontsize=16, fontweight='bold', color='#e0e0e0', y=0.98)
-    
-    # plot the overall loss curves
-    fig, ax = plt.subplots(figsize=(14, 10), facecolor='#1a1a2e')
-    ax.plot(epochs, history['train_loss'], color='blue', label='Train Loss')
-    ax.plot(epochs, history['test_loss'], color='red', label='Test Loss')
-    ax.set_title('Overall Loss Curves')
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Loss')
-    ax.legend()
-    plt.show()
-
-    
-    
+OUTPUT_DIR_PATH = paths.get_output_path()
+DATASET_NAME = "raven-20000"
+PERCENTAGE_TO_USE = 0.0025
+NB_EPOCHS = 2
+BATCH_SIZE = 5
+LEARNING_RATE = 1e-4
+LEARNING_DETAILS = True
+METRICS_DETAILED = True
 
 
 
-    overall_loss_titles = [
-        ('train_loss', 'Overall train Loss'),
-        ('test_loss', 'Overall test Loss')
-    ]
 
-    detailed_loss_titles = [
-        ('train_loss_type', 'Type attribute train Loss'),
-        ('test_loss_type', 'Type attribute test Loss'),
-        ('train_loss_size', 'Size attribute train Loss'),
-        ('test_loss_size', 'Size attribute test Loss'),
-        ('train_loss_color', 'Color attribute train Loss'),
-        ('test_loss_color', 'Color attribute test Loss'),
-        ('train_loss_angle', 'Angle attribute train Loss'),
-        ('test_loss_angle', 'Angle attribute test Loss')
-    ]
-
-    titles = [
-        ('train_accuracy', 'Overall train Accuracy'),
-        ('test_accuracy', 'Overall test Accuracy'),
-        ('train_accuracy_type', 'Type attribute train Accuracy'),
-        ('test_accuracy_type', 'Type attribute test Accuracy'),
-        ('train_accuracy_size', 'Size attribute train Accuracy'),
-        ('test_accuracy_size', 'Size attribute test Accuracy'),
-        ('train_accuracy_color', 'Color attribute train Accuracy'),
-        ('test_accuracy_color', 'Color attribute test Accuracy'),
-        ('train_accuracy_angle', 'Angle attribute train Accuracy'),
-        ('test_accuracy_angle', 'Angle attribute test Accuracy'),
-        ('train_precision', 'Overall train precision'),
-        ('test_precision', 'Overall test precision'),
-        ('train_precision_type', 'Type attribute train precision'),
-        ('test_precision_type', 'Type attribute test precision'),
-        ('train_precision_size', 'Size attribute train precision'),
-        ('test_precision_size', 'Size attribute test precision'),
-        ('train_precision_color', 'Color attribute train precision'),
-        ('test_precision_color', 'Color attribute test precision'),
-        ('train_precision_angle', 'Angle attribute train precision'),
-        ('test_precision_angle', 'Angle attribute test precision'),
-        ('train_recall', 'Overall train recall'),
-        ('test_recall', 'Overall test recall'),
-        ('train_recall_type', 'Type attribute train recall'),
-        ('test_recall_type', 'Type attribute test recall'),
-        ('train_recall_size', 'Size attribute train recall'),
-        ('test_recall_size', 'Size attribute test recall'),
-        ('train_recall_color', 'Color attribute train recall'),
-        ('test_recall_color', 'Color attribute test recall'),
-        ('train_recall_angle', 'Angle attribute train recall'),
-        ('test_recall_angle', 'Angle attribute test recall'),
-        ('train_f1', 'Overall train f1'),
-        ('test_f1', 'Overall test f1'),
-        ('train_f1_type', 'Type attribute train f1'),
-        ('test_f1_type', 'Type attribute test f1'),
-        ('train_f1_size', 'Size attribute train f1'),
-        ('test_f1_size', 'Size attribute test f1'),
-        ('train_f1_color', 'Color attribute train f1'),
-        ('test_f1_color', 'Color attribute test f1'),
-        ('train_f1_angle', 'Angle attribute train f1'),
-        ('test_f1_angle', 'Angle attribute test f1')
-    ]
-
-    for ax, (key, titre) in zip(axes.flat, titres):
-        ax.set_facecolor('#2a2a4a')
-        ax.plot(epochs, history[f'train_{key}'], '-o', color='#64ffda',
-                linewidth=2, markersize=4, label='Entraînement')
-        ax.plot(epochs, history[f'val_{key}'], '-s', color='#ff6b6b',
-                linewidth=2, markersize=4, label='Validation')
-        ax.set_title(titre, fontsize=12, color='#e0e0e0', fontweight='bold')
-        ax.set_xlabel('Époque', color='#b0b0b0')
-        ax.set_ylabel('Perte', color='#b0b0b0')
-        ax.legend(facecolor='#2a2a4a', edgecolor='#555', labelcolor='#e0e0e0')
-        ax.grid(True, alpha=0.2, color='#555')
-        ax.tick_params(colors='#b0b0b0')
-        for spine in ax.spines.values():
-            spine.set_edgecolor('#555')
-
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='#1a1a2e')
-    plt.close()
-    print(f"  [OK] Courbes sauvegardees : {save_path}")
-
-
-def print_metrics(metrics):
-    """Affiche les métriques d'évaluation de façon formatée."""
+def print_and_save_validation_results(validation_results):
+    """Prints the evaluation metrics in a formatted way."""
     print("\n" + "=" * 60)
-    print("  RESULTATS D'EVALUATION SUR LE JEU DE TEST")
+    print("  RESULTS ON VALIDATION SET  ")
+    print(f" Number: \n  - Crops   : {validation_results['val_num_of_crops']} \n  - Batches : {validation_results['val_num_of_batches']}")
     print("=" * 60)
-    print(f"  Perte totale         : {metrics['loss_total']:.4f}")
-    print(f"  Perte presence       : {metrics['loss_presence']:.4f}")
-    print(f"  Perte attributs      : {metrics['loss_attr']:.4f}")
-    print(f"  Perte reconstruction : {metrics['loss_recon']:.6f}")
-    print("-" * 60)
-    print(f"  Precision presence   : {metrics['presence_accuracy']*100:.2f}%")
-    print(f"  Precision type       : {metrics['type_accuracy']*100:.2f}%")
-    print(f"  MAE taille           : {metrics['size_mae']:.4f}")
-    print(f"  MAE couleur          : {metrics['color_mae']:.4f}")
-    print(f"  MAE angle            : {metrics['angle_mae']:.4f}")
-    print(f"  MSE reconstruction   : {metrics['recon_mse']:.6f}")
-    print("=" * 60)
+    print(f"  Loss   : {validation_results['val_loss']:.4f}")
+    print(f"  Accuracy : {validation_results['val_accuracy']*100:.2f}%")
+    print(f"  Precision           : {validation_results['val_precision']:.4f}%")
+    print(f"  Recall           : {validation_results['val_recall']:.4f}%")
+    print(f"  F1 score          : {validation_results['val_f1']:.4f}%")
+    print("-" * 14 + " DETAILED LOSSES " + "-" * 15)
+    print(f"  Type Loss    : {validation_results['val_loss_type']:.4f}")
+    print(f"  Size Loss    : {validation_results['val_loss_size']:.4f}")
+    print(f"  Color Loss   : {validation_results['val_loss_color']:.4f}")
+    print(f"  Angle Loss   : {validation_results['val_loss_angle']:.4f}")
+    print("-" * 13 + " DETAILED ACCURACIES " + "-" * 13)
+    print(f"  Type Accuracy : {validation_results['val_accuracy_type']*100:.2f}%")
+    print(f"  Size Accuracy : {validation_results['val_accuracy_size']*100:.2f}%")
+    print(f"  Color Accuracy : {validation_results['val_accuracy_color']*100:.2f}%")
+    print(f"  Angle Accuracy : {validation_results['val_accuracy_angle']*100:.2f}%")
+    print("-" * 14 + " DETAILED PRECISIONS " + "-" * 13)
+    print(f"  Type Precision     : {validation_results['val_precision_type']:.4f}")
+    print(f"  Size Precision     : {validation_results['val_precision_size']:.4f}")
+    print(f"  Color Precision    : {validation_results['val_precision_color']:.4f}")
+    print(f"  Angle Precision    : {validation_results['val_precision_angle']:.4f}")
+    print("-" * 14 + " DETAILED RECALLS " + "-" * 15)
+    print(f"  Type Recall     : {validation_results['val_recall_type']:.4f}")
+    print(f"  Size Recall     : {validation_results['val_recall_size']:.4f}")
+    print(f"  Color Recall    : {validation_results['val_recall_color']:.4f}")
+    print(f"  Angle Recall    : {validation_results['val_recall_angle']:.4f}")
+    print("-" * 13 + " DETAILED F1 SCORES " + "-" * 14)
+    print(f"  Type F1 score     : {validation_results['val_f1_type']:.4f}")
+    print(f"  Size F1 score     : {validation_results['val_f1_size']:.4f}")
+    print(f"  Color F1 score    : {validation_results['val_f1_color']:.4f}")
+    print(f"  Angle F1 score    : {validation_results['val_f1_angle']:.4f}")
+    
+    # Saving validation results
+    validation_results_path = os.path.join(OUTPUT_DIR_PATH, "validation_results.json")
+    with open(validation_results_path, 'w') as f:
+        json.dump(validation_results, f, indent=2)
+    print(f"\n  [OK] Validation results saved : {validation_results_path}")
 
 
 # =============================================================================
@@ -183,86 +94,111 @@ def print_metrics(metrics):
 # =============================================================================
 
 def run_training():
-    """Configure et lance l'entraînement complet."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    # 0. Périphérique
+    """Configure and run the training process for the CNN encoder model on the RAVEN dataset."""
+    
+    # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Peripherique : {device}")
+    print(f"Device : {device}")
     if device.type == 'cuda':
         print(f"  GPU : {torch.cuda.get_device_name(0)}")
 
-    # 1. Données (toutes les configurations)
-    print(f"\nChargement des donnees depuis : {DATA_PATH}")
-    print(f"  Limite par config : {LIMIT_PER_CONFIG or 'Tout'}")
+    # 1. Load datasets
 
-    train_dataset = RavenDataset(data_dir=DATA_PATH, split='train', limit_per_config=LIMIT_PER_CONFIG)
-    val_dataset = RavenDataset(data_dir=DATA_PATH, split='val', limit_per_config=LIMIT_PER_CONFIG)
-    test_dataset = RavenDataset(data_dir=DATA_PATH, split='test', limit_per_config=LIMIT_PER_CONFIG)
+    print(f"\nLoading dataset : {DATASET_NAME}")
+    print(f"  Percentage to use : {PERCENTAGE_TO_USE*100}%")
 
-    print(f"  Train : {len(train_dataset)} panels ({len(train_dataset)//16} fichiers)")
-    print(f"  Val   : {len(val_dataset)} panels ({len(val_dataset)//16} fichiers)")
-    print(f"  Test  : {len(test_dataset)} panels ({len(test_dataset)//16} fichiers)")
+    train_dataset = RavenDataset(
+                        dataset=DATASET_NAME,
+                        split='train',
+                        percentage_limit=PERCENTAGE_TO_USE)
+    val_dataset = RavenDataset(
+                        dataset=DATASET_NAME,
+                        split='val',
+                        percentage_limit=PERCENTAGE_TO_USE)
+    test_dataset = RavenDataset(
+                        dataset=DATASET_NAME,
+                        split='test',
+                        percentage_limit=PERCENTAGE_TO_USE)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    # 2. DataLoaders
 
-    # 2. Modèle
-    model = RavenEncoderDecoder(num_slots=10, feat_dim=13).to(device)
+    print(f"\nBatch size : {BATCH_SIZE}")
+    print(f"Train dataset loaded : {len(train_dataset)} problems")
+    print(f"Val dataset loaded : {len(val_dataset)} problems")
+    print(f"Test dataset loaded : {len(test_dataset)} problems")
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True)
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False)
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False)
+
+    # 3. Model
+    model = RavenCnnEncoder().to(device)
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"\nModele : RavenEncoderDecoder ({total_params:,} parametres)")
+    print(f"\nModele : RavenCnnEncoder ({total_params:,} parametres)")
+    
+    # 4. Optimizer and Loss
+
+    print(f"\n Optimizer : Adam")
+    print(f" Learning rate : {LEARNING_RATE}")
+    print(f" Loss : CompositeLoss with loss_detailed=True")
+    print(f" Metrics : CompositeMetric with metrics_detailed=True")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    criterion = CompositeLoss(recon_weight=20.0)
+    criterion = CompositeLoss(loss_detailed=LEARNING_DETAILS)
+    metrics  = CompositeMetric(metrics_detailed=METRICS_DETAILED, device=device)
 
-    # 3. Trainer
-    trainer = Trainer(model=model, optimizer=optimizer, criterion=criterion, device=device)
+    # 5. Training
+    trainer = Trainer(model=model, optimizer=optimizer, criterion=criterion, metrics=metrics, device=device)
+    print(f"epochs={NB_EPOCHS}, batch_size={BATCH_SIZE}, lr={LEARNING_RATE}")
 
-    # 4. Entraînement
-    print(f"\n{'='*60}")
-    print(f"  ENTRAINEMENT - {EPOCHS} epoques, batch_size={BATCH_SIZE}, lr={LEARNING_RATE}")
-    print(f"{'='*60}\n")
+    checkpoint_dir = os.path.join(OUTPUT_DIR_PATH, "checkpoints")
+    with TrainingTimer(model=model) as train_timer:
+        history = trainer.fit(train_loader, test_loader, epochs=NB_EPOCHS, checkpoint_dir=checkpoint_dir)
+    model_training_time = train_timer.elapsed
 
-    checkpoint_dir = os.path.join(OUTPUT_DIR, "checkpoints")
-    history = trainer.fit(train_loader, val_loader, epochs=EPOCHS, checkpoint_dir=checkpoint_dir)
+    # 6. Validation and confusion matrix
+    val_results, predictions, targets  = trainer.validate(val_loader)
+    confusion_matrix = metrics.compute_confusion_matrix(predictions, targets)
+    print_and_save_validation_results(val_results)
 
-    # 5. Sauvegarder l'historique
-    history_path = os.path.join(OUTPUT_DIR, "training_history.json")
+    # 7. Saving the training history
+    history_path = os.path.join(OUTPUT_DIR_PATH, "training_history.json")
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
-    print(f"\n  [OK] Historique sauvegarde : {history_path}")
+    print(f"\n  [OK] Training history saved : {history_path}")
 
-    # 6. Courbes d'apprentissage
-    curves_path = os.path.join(OUTPUT_DIR, "learning_curves.png")
-    plot_learning_curves(history, curves_path)
+    # 8. Learning curves
+    for metric in METRICS:
+        curves_path = os.path.join(OUTPUT_DIR_PATH, f"{metric}_curves.png")
+        oracle.plot_metric_curves(history, metric, curves_path)
+    
+    for attribute in ENTITY_ATTRIBUTES:
+        confusion_matrix_path = os.path.join(OUTPUT_DIR_PATH, f"{attribute}_confusion_matrix.png")
+        oracle.plot_confusion_matrix(confusion_matrix, attribute, confusion_matrix_path)
+        attribute_curves = os.path.join(OUTPUT_DIR_PATH, f"{attribute}_curves.png")
+        oracle.plot_attribute_metrics_curves(history, attribute, attribute_curves)
+    
 
-    # 7. Sauvegarde finale du modèle
-    model_path = os.path.join(OUTPUT_DIR, "raven_encoder_decoder_final.pth")
+    # 9. Saving the final model
+    models_dir_path = os.path.join(OUTPUT_DIR_PATH, "models")
+    if not os.path.exists(models_dir_path):
+        os.makedirs(models_dir_path)
+    model_path = os.path.join(models_dir_path, "raven_cnn_encoder_final.pth")
     torch.save(model.state_dict(), model_path)
-    print(f"  [OK] Modele sauvegarde : {model_path}")
+    print(f"  [OK] Model saved : {model_path}")
 
-    # Sauvegarde de l'encodeur seul (pour le GNN)
-    encoder_path = os.path.join(OUTPUT_DIR, "raven_encoder_final.pth")
-    encoder_state = {
-        'backbone': model.backbone.state_dict(),
-        'projection': model.projection_layer.state_dict()
-    }
-    torch.save(encoder_state, encoder_path)
-    print(f"  [OK] Encodeur sauvegarde : {encoder_path}")
 
-    # 8. Évaluation sur le jeu de test
-    print("\nEvaluation sur le jeu de test...")
-    metrics = trainer.evaluate(test_loader)
-    print_metrics(metrics)
 
-    # Sauvegarder les métriques
-    metrics_path = os.path.join(OUTPUT_DIR, "test_metrics.json")
-    with open(metrics_path, 'w') as f:
-        json.dump(metrics, f, indent=2)
-    print(f"\n  [OK] Metriques sauvegardees : {metrics_path}")
-
-    return history, metrics
+    return history, val_results ,model_training_time
 
 
 # =============================================================================

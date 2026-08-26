@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 
 from hri_gnn.config.const import Configuration
-from hri_gnn.utils.data import get_dataset_path
+from hri_gnn.utils import paths
 
 def problem_builder(images: list, xml_tree) -> tuple[list[dict], list[dict]]:
     """
@@ -97,7 +97,7 @@ def problem_builder(images: list, xml_tree) -> tuple[list[dict], list[dict]]:
     return panels, rules
 
 def read_split_problems(split, dataset="raven-100"):
-    data_folder, num_prbs_per_confg = get_dataset_path(dataset)
+    data_folder, num_prbs_per_confg = paths.get_dataset_path(dataset)
     problems =[]
     for config in Configuration.all():
         problems_ids = [int(file.stem.split("_")[1]) for file in data_folder.glob(f"{config}/RAVEN_*{split}.xml")]
@@ -105,14 +105,14 @@ def read_split_problems(split, dataset="raven-100"):
     return problems
 
 def read_config_problems(config, dataset="raven-100"):
-    data_folder, num_prbs_per_confg = get_dataset_path(dataset)
+    data_folder, num_prbs_per_confg = paths.get_dataset_path(dataset)
     problems =[]
     for prblm_id in range(num_prbs_per_confg):
         problems.append(read_config_id_problem(config, prblm_id, dataset))
     return problems
 
 def read_config_split_problems(config, split, dataset="raven-100"):
-    data_folder, num_prbs_per_confg = get_dataset_path(dataset)
+    data_folder, num_prbs_per_confg = paths.get_dataset_path(dataset)
     problems =[]
     problems_ids = [int(file.stem.split("_")[1]) for file in data_folder.glob(f"{config}/RAVEN_*{split}.xml")]
     problems.extend([read_config_id_problem(config, prblm_id, dataset) for prblm_id in problems_ids])
@@ -137,7 +137,7 @@ def read_config_id_problem(config, prblm_id, dataset="raven-100"):
 
     """
     # Get the dataset folder path and the number of problems per config
-    data_folder, num_prbs_per_confg = get_dataset_path(dataset)
+    data_folder, num_prbs_per_confg = paths.get_dataset_path(dataset)
     
     if config not in Configuration.all():
         raise ValueError(f"Config :{config} is not valid, possible values :{Configuration.all()}")
@@ -197,7 +197,7 @@ def read_random_problem(config= None, dataset:str='raven-100', seed=None):
 
     """
     # Get the dataset folder path and the number of problems per config
-    data_folder, num_prbs_per_confg = get_dataset_path(dataset)
+    data_folder, num_prbs_per_confg = paths.get_dataset_path(dataset)
     
     if seed is not None:
         np.random.seed(seed)

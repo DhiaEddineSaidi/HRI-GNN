@@ -2,7 +2,7 @@ import torch.nn as nn
 
 class CompositeLoss(nn.Module):
 
-    def __init__(self, criterion=nn.CrossEntropyLoss()):
+    def __init__(self, criterion=nn.CrossEntropyLoss(), loss_detailed = True):
         """
         Initialize the composite loss.
         
@@ -12,6 +12,10 @@ class CompositeLoss(nn.Module):
         """
         super().__init__()
         self.criterion = criterion
+        self.loss_detailed = loss_detailed
+
+    def is_loss_detailed(self):
+      return self.loss_detailed
 
     def forward(self, pred_logits, y):
         """
@@ -58,10 +62,15 @@ class CompositeLoss(nn.Module):
         # calculate the composite loss (weigh equally for each task)
         composite_loss = loss_type + loss_size + loss_color + loss_angle
 
-        return {
+        if self.loss_detailed:
+          return {
             "loss":composite_loss, 
             "loss_type":loss_type, 
             "loss_size":loss_size, 
             "loss_color":loss_color, 
             "loss_angle":loss_angle
-        }
+          }
+        else:
+          return {
+            "loss":composite_loss
+          }

@@ -1,9 +1,10 @@
+import os
 import torch
 import torch.nn as nn
 from tqdm.auto import tqdm
 
-from hri_gnn.metrics import CompositeMetric
-from hri_gnn.config.const import METRICS, ENTITY_ATTRIBUTES
+#from hri_gnn.metrics import CompositeMetric
+from hri_gnn.config.const import ENTITY_ATTRIBUTES
 
 
 class Trainer:
@@ -18,27 +19,18 @@ class Trainer:
         The optimizer (ex: Adam).
     criterion : nn.Module
         The loss function (CompositeLoss).
-    device : torch.device
-        The device (CPU or GPU).
+
     """
 
-    def __init__(self, model: nn.Module, optimizer:torch.optim.Optimizer, criterion:nn.Module, metrics= METRICS, metrics_detials= False, loss_details = False, device= None):
+    def __init__(self, model: nn.Module, optimizer:torch.optim.Optimizer, criterion:nn.Module, metrics, device= "cpu"):
         self.model = model
-        # self.dataloader = dataloader
         self.optimizer = optimizer
         self.criterion = criterion
+        self.device = device
         self.metrics = metrics
-        self.metrics_detials = metrics_detials
-        self.loss_details = loss_details
-        if device is None:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            print(f"No device provided, Trainer will use: {self.device}")
-        else:
-            self.device = device
-            print(f"Device provided, Trainer will use: {self.device}")
-
-        # Initialize metrics
-        self.composite_metrics = CompositeMetric(metric_names=self.metrics, device=device)
+        # pyrefly: ignore [not-callable]
+        self.loss_detailed = self.criterion.is_loss_detailed()
+        self.metrics_detailed = self.metrics.is_metrics_detailed()
 
     def train_step(self, batch):
         """
@@ -73,7 +65,7 @@ class Trainer:
         # compute the loss
         losses = self.criterion(logits, y_train)
         # compute metrics
-        metrics = self.composite_metrics.compute(logits, y_train)
+        metrics = self.metrics.compute(logits, y_train)
         composite_loss = losses['loss']
 
         # backward pass
@@ -111,7 +103,7 @@ class Trainer:
         with torch.inference_mode():
             logits = self.model(X_test)
             losses = self.criterion(logits, y_test)
-            metrics = self.composite_metrics.compute(logits, y_test)
+            metrics = self.metrics.compute(logits, y_test)
 
         test_step_output = {}
         test_step_output.update(losses)
@@ -144,20 +136,18 @@ class Trainer:
         """
         # initialize history
         history = {}
-        # history['train_number_of_crops'] = []
-        # history['test_number_of_crops'] = []
-        # history['train_number_of_batches'] = []
-        # history['test_number_of_batches'] = []
         history[f"train_loss"] = []
         history[f"test_loss"] = []
-        if self.loss_details:
+
+        if self.loss_detailed:
             for attribute in ENTITY_ATTRIBUTES.keys():
                 history[f"train_loss_{attribute}"] = []
                 history[f"test_loss_{attribute}"] = []
+
         for metric in self.metrics:
             history[f"train_{metric}"] = []
             history[f"test_{metric}"] = []
-            if self.metrics_detials:
+            if self.metrics_detailed:
                 for attribute in ENTITY_ATTRIBUTES.keys():
                     history[f"train_{metric}_{attribute}"] = []
                     history[f"test_{metric}_{attribute}"] = []
@@ -171,13 +161,13 @@ class Trainer:
 
             # initialize the training loss sums
             train_loss_sums = {'loss': 0.0}
-            if self.loss_details:
+            if self.loss_detailed:
                 for attribute in ENTITY_ATTRIBUTES.keys():
                     train_loss_sums[f'loss_{attribute}'] = 0.0
             
             # initialize the training metrics sums
             train_metrics_sums = {metric:0.0 for metric in self.metrics}
-            if self.metrics_detials:
+            if self.metrics_detailed:
                  train_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
                 
             # start the trianing loop
@@ -218,12 +208,12 @@ class Trainer:
             
             # initialize the test loss sums
             test_loss_sums = {'loss': 0.0}
-            if self.loss_details:
+            if self.loss_detailed:
                 for attribute in ENTITY_ATTRIBUTES.keys():
                     test_loss_sums[f'loss_{attribute}'] = 0.0
             # initialize the test metrics sums
             test_metrics_sums = {metric:0.0 for metric in self.metrics}
-            if self.metrics_detials:
+            if self.metrics_detailed:
                  test_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
                 
             for test_batch_id, test_batch in enumerate(test_dataloader):
@@ -257,17 +247,14 @@ class Trainer:
                 test_avg_metric = test_metrics_sums[metric] / (test_batch_id+1)
                 history[f'test_{metric}'].append(test_avg_metric)
 
-            # Affichage
-            #string_to_print = f"- Train (Test) number of batches: {train_batch_id+1} ({test_batch_id+1})\n"
-            #string_to_print += f"- Train (Test) number of crops: {num_train_crops} ({num_test_crops})\n"
+            # Printing
             string_to_print = "- Train (Test) losses: "
             for key in train_loss_sums:
                 t = history[f'train_{key}'][-1]
                 v = history[f'test_{key}'][-1]
                 string_to_print += f"{key}: {t:.4f} ({v:.4f}) - "
             
-
-            # add metrics to the string to print
+            # Adding metrics to the string to print
             if verbose:
                 string_to_print +="\n- Train (Test) Metrics :"
                 for key in train_metrics_sums.keys():
@@ -275,18 +262,16 @@ class Trainer:
                     v = history[f'test_{key}'][-1]
                     string_to_print += f"{key}: {t:.4f} ({v:.4f}) - "
             
-            # Print final string
             print(f"Epoque {epoch+1}/{epochs}: \n{string_to_print}")
 
-            # Save a checkpoint every 'checkpoint_epochs'
+            # Saving a checkpoint every 'checkpoint_epochs'
             if checkpoint_dir and (epoch + 1) % checkpoint_epochs == 0:
-                import os
                 os.makedirs(checkpoint_dir, exist_ok=True)
                 path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth")
                 torch.save(self.model.state_dict(), path)
                 print(f"  > Checkpoint saved: {path}")
 
-        # end of training print  
+        # Printing the end of training
         output_string = "\nTraining finished!....\n"
         output_string += f"Train (Test) number of crops: {history['train_number_of_crops']} ({history['test_number_of_crops']})"
         output_string += f"Train (Test) number of batches: {history['train_number_of_batches']} ({history['test_number_of_batches']})"
@@ -337,21 +322,28 @@ class Trainer:
             - 'f1': overall f1-score
             - 'num_of_crops': number of crops
             - 'num_of_batches': number of batches
+        y_true: torch.Tensor
+            true values
+        y_logits: dict
+            predicted logits
         """
         self.model.eval()
 
         # accumulators for loss
         loss_sums = {'loss': 0.0}
-        if self.loss_details:
+        if self.loss_detailed:
             for attribute in ENTITY_ATTRIBUTES.keys():
                 loss_sums[f'loss_{attribute}'] = 0.0
         # accumulators for metrics
         metrics_sums = {metric:0.0 for metric in self.metrics}
-        if self.metrics_detials:
+        if self.metrics_detailed:
             metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
         num_batches = 0
         num_crops = 0
 
+        batch_y_logits = {"pred_type_logits":[], "pred_size_logits":[], "pred_color_logits":[], "pred_angle_logits":[]}
+        y_logits = {}
+        y_true = []
         self.model.eval()
         with torch.inference_mode():
             for batch in tqdm(val_dataloader, desc="Validating the model..."):
@@ -364,12 +356,22 @@ class Trainer:
                     loss_sums[key] += losses[key].item()
                 
                 # metrics
-                metrics = self.composite_metrics.compute(logits, y_val)
+                metrics = self.metrics.compute(logits, y_val)
                 for key in metrics_sums:
                     metrics_sums[key] += metrics[key]
 
+                # store logits and true values
+                for key in batch_y_logits.keys():
+                    batch_y_logits[key].append(logits[key])
+                y_true.append(y_val)
+
                 num_batches += 1
                 num_crops += X_val.size(0)
+        
+        # Printing the validation results
+        output_string = "\nValidation finished!....\n"
+        output_string += f"Number of crops: {num_crops} | Number of batches: {num_batches}\n"
+        print(output_string)
 
         results = {}
         # add losses to results
@@ -383,4 +385,8 @@ class Trainer:
         results['val_num_of_crops'] = num_crops
         results['val_num_of_batches'] = num_batches
 
-        return results
+        # add logits and true values to results
+        for key in batch_y_logits.keys():
+            y_logits[key] = torch.cat(batch_y_logits[key], dim=0)
+
+        return results , y_logits, torch.cat(y_true, dim=0)

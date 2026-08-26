@@ -6,9 +6,9 @@ import numpy as np
 import torch
 import torchvision.transforms.v2.functional as F
 
-from hri_gnn.config.const import Configuration, SPLITS
-from hri_gnn.utils.data import readers, get_dataset_path
-
+from hri_gnn.config.const import Configuration, SPLITS, INPUT_IMAGE_SIZE, OUTPUT_IMAGE_CROP_SIZE
+from hri_gnn.utils.data import readers
+from hri_gnn.utils import paths
 
 class RavenDataset(torch.utils.data.Dataset):
     """
@@ -33,7 +33,7 @@ class RavenDataset(torch.utils.data.Dataset):
             raise ValueError(f"percentage_limit {percentage_limit} is not valid. Valid values are between 0.0 and 1.0")
         
         # load dataset 
-        dataset_path, length_per_config = get_dataset_path(dataset)
+        dataset_path, length_per_config = paths.get_dataset_path(dataset)
 
         # list of tuples (config, prblm_id) for the passed split
         for config in [d for d in os.listdir(dataset_path)]:
@@ -51,7 +51,7 @@ class RavenDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.index_list)
 
-    def _convert_bbox(self, bbox, img_size=160):
+    def _convert_bbox(self, bbox, img_size=INPUT_IMAGE_SIZE):
         """
         Convert bounding box format from [cy, cx, h, w] to [y1, x1, y2, x2]
         """
@@ -97,7 +97,7 @@ class RavenDataset(torch.utils.data.Dataset):
                     crop = img_out[y1:y2, x1:x2] if (struct_name == 'Out_In' and comp['name'] == 'Out') else img_np[y1:y2, x1:x2]
                     
                     crop_tensor = torch.from_numpy(crop).permute(1,0).unsqueeze(0).float()
-                    crops.append(F.resize(crop_tensor, [80, 80], antialias=True))
+                    crops.append(F.resize(crop_tensor, [OUTPUT_IMAGE_CROP_SIZE, OUTPUT_IMAGE_CROP_SIZE], antialias=True))
                     
                     # target vector (y) for CNN
                     attr_vector = [entity['Type'], entity['Size'], entity['Color'], entity['Angle']]
