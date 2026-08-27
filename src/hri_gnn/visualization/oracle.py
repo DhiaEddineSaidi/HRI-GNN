@@ -270,7 +270,7 @@ def plot_attributes_curves(history, nb_epochs, attributes=list(ENTITY_ATTRIBUTES
             print(f"\n[OK] {attribute} metric curves saved to {save_path/"attributes_curves"/f"{attribute}_metrics_curves.png"}")
         plt.close()
 
-def plot_metrics_curves(history, metric, nb_epochs, save_path):
+def plot_metrics_curves(history, metric, nb_epochs, save_path=None):
     """
     Plot the metric curves for all attributes and save them to a file.
     
@@ -343,3 +343,39 @@ def plot_confusion_matrices(history,validation_results, attributes=list(ENTITY_A
             plt.savefig(save_path/'confusion_matrices'/split/f"overall_confusion_matrix.png")
             print(f"\n[OK] Confusion matrix for {split} overall saved to {save_path/'confusion_matrices'/split/f'overall_confusion_matrix.png'}")
         plt.close()
+
+
+def plot_composed_metrics_curves(history, metric, nb_epochs, save_path=None):
+    """
+    Plot the composed metric curves for all attributes and save them to a file.
+    
+    Args:
+    -----
+        history (dict): the history dict with the keys : 'train_loss_type', 'train_loss_size', 'train_loss_color', 'train_loss_angle', 'train_loss', 'test_loss_type', 'test_loss_size', 'test_loss_color', 'test_loss_angle', 'test_loss', 'train_accuracy_type', 'train_accuracy_size', 'train_accuracy_color', 'train_accuracy_angle', 'train_accuracy', 'test_accuracy_type', 'test_accuracy_size', 'test_accuracy_color', 'test_accuracy_angle', 'test_accuracy', 'train_precision_type', 'train_precision_size', 'train_precision_color', 'train_precision_angle', 'train_precision', 'test_precision_type', 'test_precision_size', 'test_precision_color', 'test_precision_angle', 'test_precision', 'train_recall_type', 'train_recall_size', 'train_recall_color', 'train_recall_angle', 'train_recall', 'test_recall_type', 'test_recall_size', 'test_recall_color', 'test_recall_angle', 'test_recall'
+        nb_epochs (int): the number of epochs
+        metric (str): the metric name to plot : 'loss', 'accuracy', 'precision', 'recall'
+        save_path (str): the path to save the plot
+    
+    Returns:
+    -------
+        None
+    """
+    split=['train', 'test']
+    colors = ['red', 'blue', 'green', 'black']
+    attributes = ['type', 'size', 'color', 'angle']
+    
+    epochs = range(1 , nb_epochs+1)
+    fig, axes = plt.subplots(nrows=2, ncols=1,figsize=(14,10))
+    for ax, split in zip(axes.flat, list(set(SPLITS)-{"val"})):
+        for attribute, color in zip(attributes,colors):
+            ax.plot(epochs, history[f'{split}_{metric}_{attribute}'],color=color,linewidth=2, label=f'{attribute}')
+            ax.set_title(f'{split} attributes {metric} Curves')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel(metric)
+            ax.set_xticks(epochs)
+            ax.legend()
+            ax.grid(True, alpha=0.2, color='#555')
+    if save_path:
+        plt.savefig(save_path/'metric_curves'/f"{metric}_composed_curves.png")
+        print(f"\n[OK] Composed {metric} curves saved to {save_path/'metric_curves'/f'{metric}_composed_curves.png'}")
+    plt.close()

@@ -78,7 +78,7 @@ def print_validation_results(validation_results, save_path=None):
 # Training Process
 # =============================================================================
 
-def run_training(dataset_name, percentage_to_use, nb_epochs, batch_size, learning_rate):
+def run_training(dataset_name, percentage_to_use, nb_epochs, check_frequency, batch_size, learning_rate):
 
     output_path = paths.get_output_path()
     paths.output_paths(output_path)
@@ -153,7 +153,7 @@ def run_training(dataset_name, percentage_to_use, nb_epochs, batch_size, learnin
     print(f"epochs={nb_epochs}, batch_size={batch_size}, lr={learning_rate}")
 
     with TrainingTimer(model=model) as train_timer:
-        history = trainer.fit(train_loader, test_loader, epochs=nb_epochs, checkpoint_dir=output_path, checkpoint_epochs=1)
+        history = trainer.fit(train_loader, test_loader, epochs=nb_epochs, checkpoint_dir=output_path, check_frequency=check_frequency)
     model_training_time = train_timer.elapsed
 
     # 6. Validation
@@ -172,6 +172,7 @@ def run_training(dataset_name, percentage_to_use, nb_epochs, batch_size, learnin
             oracle.plot_confusion_matrices(history, validation_results, save_path=output_path)
         else:
             oracle.plot_metrics_curves(history, metric, nb_epochs, save_path=output_path)
+            oracle.plot_composed_metrics_curves(history, metric, nb_epochs, save_path=output_path)
     
     oracle.plot_attributes_curves(history, nb_epochs, save_path=output_path)
     

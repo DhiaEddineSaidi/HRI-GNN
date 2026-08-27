@@ -111,7 +111,7 @@ class Trainer:
 
         return test_step_output
 
-    def fit(self, train_dataloader, test_dataloader, epochs, checkpoint_dir=None, checkpoint_epochs=5, verbose=True):
+    def fit(self, train_dataloader, test_dataloader, epochs, checkpoint_dir=None, check_frequency=5, verbose=True):
         """
         Complete training loop over several epochs.
 
@@ -275,7 +275,7 @@ class Trainer:
             print(f"Epoque {epoch+1}/{epochs}: \n{string_to_print}")
 
             # Saving a checkpoint every 'checkpoint_epochs'
-            if checkpoint_dir and (epoch + 1) % checkpoint_epochs == 0:
+            if checkpoint_dir and (epoch + 1) % check_frequency == 0:
                 path = checkpoint_dir/"checkpoints"/ f"{self.model.__class__.__name__}-checkpoint_epoch_{epoch+1}.pth"
                 torch.save(self.model.state_dict(), path)
                 print(f"  > Checkpoint saved: {path}")
