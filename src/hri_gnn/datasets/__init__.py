@@ -119,7 +119,7 @@ class RavenDataset(torch.utils.data.Dataset):
         torch.tensor(problem_indices, dtype=torch.long))
 
 
-def gnn_flat_collate(batch):
+def raven_flat_collate(batch):
     all_crops = []
     all_attrs = []
     all_bboxes = []

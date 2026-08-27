@@ -6,12 +6,14 @@ Usage:
 """
 from hri_gnn.config.const import ENTITY_ATTRIBUTES
 import os 
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
 import json
 
 import torch
 from torch.utils.data import DataLoader
 
-from hri_gnn.datasets import RavenDataset
+from hri_gnn.datasets import RavenDataset , raven_flat_collate
 from hri_gnn.models.cnn_encoder import RavenCnnEncoder
 from hri_gnn.losses import CompositeLoss
 from hri_gnn.metrics import CompositeMetric, TrainingTimer
@@ -21,17 +23,6 @@ from hri_gnn.config.const import METRICS
 from hri_gnn.visualization import oracle
 
 from hri_gnn.utils import paths
-
-# import json
-
-# import matplotlib
-# matplotlib.use('Agg')  # Backend non-interactif pour la sauvegarde d'images
-# import matplotlib.pyplot as plt
-
-
-# from matplotlib.gridspec import GridSpec
-# from hri_gnn.config.const import ENTITY_ATTRIBUTES
-# from hri_gnn.utils.paths import get_output_path
 
 OUTPUT_DIR_PATH = paths.get_output_path()
 DATASET_NAME = "raven-20000"
@@ -53,9 +44,9 @@ def print_and_save_validation_results(validation_results):
     print("=" * 60)
     print(f"  Loss   : {validation_results['val_loss']:.4f}")
     print(f"  Accuracy : {validation_results['val_accuracy']*100:.2f}%")
-    print(f"  Precision           : {validation_results['val_precision']:.4f}%")
-    print(f"  Recall           : {validation_results['val_recall']:.4f}%")
-    print(f"  F1 score          : {validation_results['val_f1']:.4f}%")
+    print(f"  Precision           : {validation_results['val_precision']:.4f}")
+    print(f"  Recall           : {validation_results['val_recall']:.4f}")
+    print(f"  F1 score          : {validation_results['val_f1']:.4f}")
     print("-" * 14 + " DETAILED LOSSES " + "-" * 15)
     print(f"  Type Loss    : {validation_results['val_loss_type']:.4f}")
     print(f"  Size Loss    : {validation_results['val_loss_size']:.4f}")
@@ -82,6 +73,9 @@ def print_and_save_validation_results(validation_results):
     print(f"  Color F1 score    : {validation_results['val_f1_color']:.4f}")
     print(f"  Angle F1 score    : {validation_results['val_f1_angle']:.4f}")
     
+    # plot confusion matrix for val results
+    oracle.plot_confusion_matrix_attributes(validation_results,splits=["val"], save_path=OUTPUT_DIR_PATH)
+
     # Saving validation results
     validation_results_path = os.path.join(OUTPUT_DIR_PATH, "validation_results.json")
     with open(validation_results_path, 'w') as f:
@@ -130,15 +124,18 @@ def run_training():
     train_loader = DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
-        shuffle=True)
+        shuffle=True,
+        collate_fn=raven_flat_collate)
     val_loader = DataLoader(
         val_dataset,
         batch_size=BATCH_SIZE,
-        shuffle=False)
+        shuffle=False,
+        collate_fn=raven_flat_collate)
     test_loader = DataLoader(
         test_dataset,
         batch_size=BATCH_SIZE,
-        shuffle=False)
+        shuffle=False,
+        collate_fn=raven_flat_collate)
 
     # 3. Model
     model = RavenCnnEncoder().to(device)
@@ -162,12 +159,11 @@ def run_training():
 
     checkpoint_dir = os.path.join(OUTPUT_DIR_PATH, "checkpoints")
     with TrainingTimer(model=model) as train_timer:
-        history = trainer.fit(train_loader, test_loader, epochs=NB_EPOCHS, checkpoint_dir=checkpoint_dir)
+        history = trainer.fit(train_loader, test_loader, epochs=NB_EPOCHS, checkpoint_dir=checkpoint_dir, checkpoint_epochs=1)
     model_training_time = train_timer.elapsed
 
-    # 6. Validation and confusion matrix
-    val_results, predictions, targets  = trainer.validate(val_loader)
-    confusion_matrix = metrics.compute_confusion_matrix(predictions, targets)
+    # 6. Validation
+    val_results = trainer.validate(val_loader)
     print_and_save_validation_results(val_results)
 
     # 7. Saving the training history
@@ -178,14 +174,14 @@ def run_training():
 
     # 8. Learning curves
     for metric in METRICS:
+        if metric == "confusion_matrix":
+            oracle.plot_confusion_matrix_attributes(history, save_path=OUTPUT_DIR_PATH)
         curves_path = os.path.join(OUTPUT_DIR_PATH, f"{metric}_curves.png")
-        oracle.plot_metric_curves(history, metric, curves_path)
+        oracle.plot_metric_curves(history, metric, save_path=curves_path)
     
     for attribute in ENTITY_ATTRIBUTES:
-        confusion_matrix_path = os.path.join(OUTPUT_DIR_PATH, f"{attribute}_confusion_matrix.png")
-        oracle.plot_confusion_matrix(confusion_matrix, attribute, confusion_matrix_path)
         attribute_curves = os.path.join(OUTPUT_DIR_PATH, f"{attribute}_curves.png")
-        oracle.plot_attribute_metrics_curves(history, attribute, attribute_curves)
+        oracle.plot_attribute_metrics_curves(history, attribute, save_path=attribute_curves)
     
 
     # 9. Saving the final model

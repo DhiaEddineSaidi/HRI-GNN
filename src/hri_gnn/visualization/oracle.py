@@ -1,3 +1,4 @@
+from hri_gnn.config.const import SPLITS
 import os
 import random 
 
@@ -263,7 +264,6 @@ def plot_attribute_metrics_curves(history, attribute, save_path):
     ax_overall.set_xticks(epochs)
     ax_overall.legend()
     ax_overall.grid(True, alpha=0.2, color='#555')
-    plt.show()
     
     if save_path:
         plt.savefig(save_path)
@@ -314,7 +314,6 @@ def plot_metric_curves(history,metric, save_path):
     ax_overall.set_xticks(epochs)
     ax_overall.legend()
     ax_overall.grid(True, alpha=0.2, color='#555')
-    plt.show()
     
     if save_path:
         plt.savefig(save_path)
@@ -322,12 +321,23 @@ def plot_metric_curves(history,metric, save_path):
     plt.close()
 
 
-def plot_confusion_matrix(confusion_matrix_dict, attributes=list(ENTITY_ATTRIBUTES.keys()), save_path=None):
+def plot_confusion_matrix_attributes(history, splits=["train","test"], attributes=list(ENTITY_ATTRIBUTES.keys()), save_path=None):
     for attribute in attributes:
-        # pyrefly: ignore [missing-argument, not-iterable, unexpected-keyword]
-        fig, ax = plot_confusion_matrix(conf_mat=confusion_matrix_dict[f"confusion_matrix_{attribute}"].cpu().numpy(), class_names=ENTITY_ATTRIBUTES[f"{attribute}"], figsize=(10, 7));
-        ax.set_title(f'{attribute} Confusion matrix')
-    if save_path:
-        plt.savefig(save_path)
-        print(f"Metrics curves saved to {save_path}")
-    plt.close()
+        for split in splits:
+            fig, ax = plot_confusion_matrix(conf_mat=np.asarray(history[f"{split}_confusion_matrix_{attribute}"]), class_names=ENTITY_ATTRIBUTES[f"{attribute}"], figsize=(10, 7));
+            ax.set_title(f'{split} {attribute} Confusion matrix')
+            if save_path:
+                confusion_matrix_path = os.path.join(save_path, f"{split}_{attribute}_confusion_matrix.png")
+                plt.savefig(confusion_matrix_path)
+                print(f"{split} {attribute} Confusion matrix saved to {confusion_matrix_path}")
+            plt.close()
+
+    # plot overall confusion matrix for all attributes and all splits
+    for split in splits:
+        fig, ax = plot_confusion_matrix(conf_mat=np.asarray(history[f"{split}_confusion_matrix"]), class_names=attributes, figsize=(10, 7))
+        ax.set_title(f'{split} Overall Confusion matrix')
+        if save_path:
+            confusion_matrix_path = os.path.join(save_path, f"{split}_confusion_matrix.png")
+            plt.savefig(confusion_matrix_path)
+            print(f"{split} Overall Confusion matrix saved to {confusion_matrix_path}")
+        plt.close()

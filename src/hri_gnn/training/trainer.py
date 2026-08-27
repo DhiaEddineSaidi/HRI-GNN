@@ -72,7 +72,7 @@ class Trainer:
         composite_loss.backward()
         # update the weights
         self.optimizer.step()
-        
+
         train_step_output = {}
         train_step_output.update(losses)
         train_step_output.update(metrics)
@@ -144,7 +144,7 @@ class Trainer:
                 history[f"train_loss_{attribute}"] = []
                 history[f"test_loss_{attribute}"] = []
 
-        for metric in self.metrics:
+        for metric in self.metrics.get_metrics_names():
             history[f"train_{metric}"] = []
             history[f"test_{metric}"] = []
             if self.metrics_detailed:
@@ -154,7 +154,7 @@ class Trainer:
 
         num_train_crops = 0
         num_test_crops = 0
-        
+
         for epoch in tqdm(range(epochs)):
 
             # --- Training ---
@@ -164,30 +164,30 @@ class Trainer:
             if self.loss_detailed:
                 for attribute in ENTITY_ATTRIBUTES.keys():
                     train_loss_sums[f'loss_{attribute}'] = 0.0
-            
+
             # initialize the training metrics sums
-            train_metrics_sums = {metric:0.0 for metric in self.metrics}
+            train_metrics_sums = {metric:0.0 for metric in self.metrics.get_metrics_names()}
             if self.metrics_detailed:
-                 train_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
-                
+                 train_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics.get_metrics_names() for attribute in ENTITY_ATTRIBUTES.keys()})
+
             # start the trianing loop
             for train_batch_id, train_batch in enumerate(train_dataloader):
-            
+
                 # execute the training step
                 step_output = self.train_step(train_batch)
 
                 # update the loss sums
                 for key in train_loss_sums.keys():
                     train_loss_sums[key] += step_output[key].item()
-                
+
                 # update the metrics sums
                 for key in train_metrics_sums.keys():
                     train_metrics_sums[key] += step_output[key]
-                        
+
                 # keep track of the number of crops
                 if epoch == 0:
                     num_train_crops += train_batch[0].size(0)
-            
+
             if epoch == 0:
                 # add num_of_crops and num_of_batches to history
                 # pyrefly: ignore [unsupported-operation]
@@ -196,41 +196,45 @@ class Trainer:
                 history['train_number_of_batches']= train_batch_id+1
 
             # training averages
-            for key in train_loss_sums:
+            for key in train_loss_sums.keys():
                 train_epoch_avg_loss = train_loss_sums[key] / (train_batch_id+1)
                 history[f'train_{key}'].append(train_epoch_avg_loss)
 
-            for key in train_metrics_sums:
+            for key in train_metrics_sums.keys():
+                if "confusion_matrix" in key:
+                    # pyrefly: ignore [missing-attribute]
+                    history[f'train_{key}'] = train_metrics_sums[key].tolist()
+                    continue
                 train_epoch_avg_metric = train_metrics_sums[key] / (train_batch_id+1)
                 history[f'train_{key}'].append(train_epoch_avg_metric)
 
             # ----------Test----------
-            
+
             # initialize the test loss sums
             test_loss_sums = {'loss': 0.0}
             if self.loss_detailed:
                 for attribute in ENTITY_ATTRIBUTES.keys():
                     test_loss_sums[f'loss_{attribute}'] = 0.0
             # initialize the test metrics sums
-            test_metrics_sums = {metric:0.0 for metric in self.metrics}
+            test_metrics_sums = {metric:0.0 for metric in self.metrics.get_metrics_names()}
             if self.metrics_detailed:
-                 test_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
-                
+                 test_metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics.get_metrics_names() for attribute in ENTITY_ATTRIBUTES.keys()})
+
             for test_batch_id, test_batch in enumerate(test_dataloader):
                 test_output = self.test_step(test_batch)
-                
+
                 # update the test loss sums
                 for key in test_loss_sums.keys():
                     test_loss_sums[key] += test_output[key].item()
-                
+
                 # update the test metrics sums
                 for metric in test_metrics_sums.keys():
                     test_metrics_sums[metric] += test_output[metric]
-                
+
                 # keep track of the number of crops
                 if epoch == 0:
                     num_test_crops += test_batch[0].size(0)
-            
+
             if epoch == 0:
                 # add num_of_crops and num_of_batches to history
                 # pyrefly: ignore [unsupported-operation]
@@ -242,8 +246,12 @@ class Trainer:
             for key in test_loss_sums.keys():
                 test_avg_loss = test_loss_sums[key] / (test_batch_id+1)
                 history[f'test_{key}'].append(test_avg_loss)
-            
+
             for metric in test_metrics_sums.keys():
+                if "confusion_matrix" in metric:
+                    # pyrefly: ignore [missing-attribute]
+                    history[f'test_{metric}'] = test_metrics_sums[metric].tolist()
+                    continue
                 test_avg_metric = test_metrics_sums[metric] / (test_batch_id+1)
                 history[f'test_{metric}'].append(test_avg_metric)
 
@@ -253,15 +261,17 @@ class Trainer:
                 t = history[f'train_{key}'][-1]
                 v = history[f'test_{key}'][-1]
                 string_to_print += f"{key}: {t:.4f} ({v:.4f}) - "
-            
+
             # Adding metrics to the string to print
             if verbose:
                 string_to_print +="\n- Train (Test) Metrics :"
                 for key in train_metrics_sums.keys():
+                    if "confusion_matrix" in key:
+                        continue
                     t = history[f'train_{key}'][-1]
                     v = history[f'test_{key}'][-1]
                     string_to_print += f"{key}: {t:.4f} ({v:.4f}) - "
-            
+
             print(f"Epoque {epoch+1}/{epochs}: \n{string_to_print}")
 
             # Saving a checkpoint every 'checkpoint_epochs'
@@ -273,8 +283,8 @@ class Trainer:
 
         # Printing the end of training
         output_string = "\nTraining finished!....\n"
-        output_string += f"Train (Test) number of crops: {history['train_number_of_crops']} ({history['test_number_of_crops']})"
-        output_string += f"Train (Test) number of batches: {history['train_number_of_batches']} ({history['test_number_of_batches']})"
+        output_string += f"- Train (Test) number of crops: {history['train_number_of_crops']} ({history['test_number_of_crops']})"
+        output_string += f"- Train (Test) number of batches: {history['train_number_of_batches']} ({history['test_number_of_batches']})"
         print(output_string)
 
         return history
@@ -283,7 +293,7 @@ class Trainer:
         """
         validate the model on a validation dataloader and calculate detailed metrics.
 
-        Args    
+        Args
         ----
         val_dataloader : DataLoader
             validation dataloader.
@@ -295,20 +305,20 @@ class Trainer:
             - 'type_loss': type loss
             - 'size_loss': size loss
             - 'color_loss': color loss
-            - 'angle_loss': angle loss 
+            - 'angle_loss': angle loss
             - 'accuracy': overall accuracy
             - 'accuracy_type': type accuracy
             - 'accuracy_size': size accuracy
             - 'accuracy_color': color accuracy
             - 'accuracy_angle': angle accuracy
             - 'accuracy': overall accuracy
-            - 'precision': overall precision 
+            - 'precision': overall precision
             - 'precision_type': type precision
             - 'precision_size': size precision
             - 'precision_color': color precision
             - 'precision_angle': angle precision
             - 'precision': overall precision
-            - 'recall': overall recall 
+            - 'recall': overall recall
             - 'recall_type': type recall
             - 'recall_size': size recall
             - 'recall_color': color recall
@@ -335,15 +345,12 @@ class Trainer:
             for attribute in ENTITY_ATTRIBUTES.keys():
                 loss_sums[f'loss_{attribute}'] = 0.0
         # accumulators for metrics
-        metrics_sums = {metric:0.0 for metric in self.metrics}
+        metrics_sums = {metric:0.0 for metric in self.metrics.get_metrics_names()}
         if self.metrics_detailed:
-            metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics for attribute in ENTITY_ATTRIBUTES.keys()})
+            metrics_sums.update({f'{metric}_{attribute}':0.0 for metric in self.metrics.get_metrics_names() for attribute in ENTITY_ATTRIBUTES.keys()})
         num_batches = 0
         num_crops = 0
-
-        batch_y_logits = {"pred_type_logits":[], "pred_size_logits":[], "pred_color_logits":[], "pred_angle_logits":[]}
-        y_logits = {}
-        y_true = []
+        
         self.model.eval()
         with torch.inference_mode():
             for batch in tqdm(val_dataloader, desc="Validating the model..."):
@@ -354,20 +361,15 @@ class Trainer:
                 losses = self.criterion(logits,y_val)
                 for key in loss_sums:
                     loss_sums[key] += losses[key].item()
-                
+
                 # metrics
                 metrics = self.metrics.compute(logits, y_val)
                 for key in metrics_sums:
                     metrics_sums[key] += metrics[key]
 
-                # store logits and true values
-                for key in batch_y_logits.keys():
-                    batch_y_logits[key].append(logits[key])
-                y_true.append(y_val)
-
                 num_batches += 1
                 num_crops += X_val.size(0)
-        
+
         # Printing the validation results
         output_string = "\nValidation finished!....\n"
         output_string += f"Number of crops: {num_crops} | Number of batches: {num_batches}\n"
@@ -380,13 +382,13 @@ class Trainer:
 
         # add metrics to results
         for metric in metrics_sums:
+            if "confusion_matrix" in metric:
+                # pyrefly: ignore [missing-attribute]
+                results[f'val_{metric}'] = metrics_sums[metric].tolist()
+                continue
             results[f'val_{metric}'] = metrics_sums[metric] / max(num_batches, 1)
-        
+
         results['val_num_of_crops'] = num_crops
         results['val_num_of_batches'] = num_batches
 
-        # add logits and true values to results
-        for key in batch_y_logits.keys():
-            y_logits[key] = torch.cat(batch_y_logits[key], dim=0)
-
-        return results , y_logits, torch.cat(y_true, dim=0)
+        return results

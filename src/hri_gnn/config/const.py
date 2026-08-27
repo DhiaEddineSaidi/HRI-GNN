@@ -41,7 +41,7 @@ UNIFORMITY_VALUES = [False, False, False, True]
 # II. Entity attributes
 
 # Geometric shape types
-TYPE_VALUES       = ["triangle", "square", "pentagon", "hexagon", "circle"]
+TYPE_VALUES       = ["none", "triangle", "square", "pentagon", "hexagon", "circle"]
 
 # Sizes (scale factor)
 SIZE_VALUES       = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]

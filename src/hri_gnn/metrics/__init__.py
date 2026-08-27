@@ -148,7 +148,7 @@ class CompositeMetric:
       for attribute in ENTITY_ATTRIBUTES.keys():
         self._confusion_matrix_fn_dict[attribute] = MulticlassConfusionMatrix(num_classes= len(ENTITY_ATTRIBUTES[attribute])).to(self.device)
 
-    def compute_confusion_matrix(self, pred_logits, y_true):
+    def _compute_confusion_matrix(self, predictions, targets):
       """
       Compute the confusion matrix for each attribute.
 
@@ -156,14 +156,15 @@ class CompositeMetric:
       -------
       dict: A dictionary with the confusion matrix for each attribute
       """
-      predictions = self._convert_logits_to_pred(pred_logits)
-      targets = self._create_targets_dict(y_true)
-      self._create_confusion_matrix_functions()
       confusion_matrix_dict = {}
       for attribute, confusion_matrix_fn in self._confusion_matrix_fn_dict.items():
         confusion_matrix_attr_val = confusion_matrix_fn(predictions[attribute], targets[attribute])
         confusion_matrix_dict[f"confusion_matrix_{attribute}"] = confusion_matrix_attr_val
-      return confusion_matrix_dict
+      confusion_matrix_dict["confusion_matrix"] = torch.block_diag(*confusion_matrix_dict.values())
+      if self.metrics_detailed:
+        return confusion_matrix_dict
+      else:
+        return {"confusion_matrix": confusion_matrix_dict["confusion_matrix"]}
       
     def compute(self, pred_logits, y_true):
       
@@ -182,7 +183,7 @@ class CompositeMetric:
           case 'f1':
             results.update(self._compute_f1(predictions,targets))
           case 'confusion_matrix':
-            pass
+            results.update(self._compute_confusion_matrix(predictions,targets))
       return results
 
 
