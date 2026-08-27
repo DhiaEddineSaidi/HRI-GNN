@@ -276,8 +276,7 @@ class Trainer:
 
             # Saving a checkpoint every 'checkpoint_epochs'
             if checkpoint_dir and (epoch + 1) % checkpoint_epochs == 0:
-                os.makedirs(checkpoint_dir, exist_ok=True)
-                path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pth")
+                path = checkpoint_dir/"checkpoints"/ f"{self.model.__class__.__name__}-checkpoint_epoch_{epoch+1}.pth"
                 torch.save(self.model.state_dict(), path)
                 print(f"  > Checkpoint saved: {path}")
 

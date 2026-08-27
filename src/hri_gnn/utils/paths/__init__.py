@@ -1,3 +1,4 @@
+from hri_gnn.config.const import SPLITS
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -33,6 +34,17 @@ def get_output_path():
         "Environment variable 'OUTPUT_PATH' is missing or not set. "
         "Please check your .env file."
     )
+
+def output_paths(output_path):
+    (output_path/"confusion_matrices").mkdir(exist_ok=True)
+    (output_path/"metric_curves").mkdir(exist_ok=True)
+    (output_path/"attributes_curves").mkdir(exist_ok=True)
+    (output_path / "checkpoints").mkdir(exist_ok=True)
+    (output_path / "models").mkdir(exist_ok=True)
+    for split in SPLITS:
+        (output_path/"confusion_matrices"/split).mkdir(exist_ok=True)
+
+
 
 
 def get_dataset_path(name:str)-> tuple[Path, int]:

@@ -235,42 +235,42 @@ def plot_crops(crops):
     plt.tight_layout()
     plt.show()
 
-def plot_attribute_metrics_curves(history, attribute, save_path):
-    
-    epochs = range(1, len(history['train_loss']) + 1)
-    rows, cols = 3,2
-    top_positions= [(row,col) for row in range(rows-1) for col in range(cols)]
+def plot_attributes_curves(history, nb_epochs, attributes=list(ENTITY_ATTRIBUTES.keys()), save_path=None):
 
-    gs = GridSpec(rows, cols, hspace=0.3,wspace=0.3)
-    fig = plt.figure(figsize=(14, 10))
+    epochs = list(range(1, nb_epochs+1))
+    for attribute in attributes:
+        rows, cols = 3,2
+        top_positions= [(row,col) for row in range(rows-1) for col in range(cols)]
 
-    for (row, col), metric in zip(top_positions, METRICS):
-        ax = fig.add_subplot(gs[row,col])
-        ax.plot(epochs, history[f'train_{metric}_{attribute}'],color='blue',linewidth=2, label=f'Train {metric} {attribute}')
-        ax.plot(epochs, history[f'test_{metric}_{attribute}'], color='red', linewidth=2, label=f'Test {metric} {attribute}')
-        ax.set_title(f'{attribute} {metric} Curves')
-        ax.set_xlabel('Epoch')
-        ax.set_ylabel(metric)
-        ax.set_xticks(epochs)
-        ax.legend()
-        ax.grid(True, alpha=0.2, color='#555')
+        gs = GridSpec(rows, cols, hspace=0.3,wspace=0.3)
+        fig = plt.figure(figsize=(14, 10))
 
-    ax_overall = fig.add_subplot(gs[2,:])
-    ax_overall.plot(epochs, history[f'train_loss_{attribute}'],color='blue',linewidth=2, label=f'Train Loss')
-    ax_overall.plot(epochs, history[f'test_loss_{attribute}'], color='red', linewidth=2, label=f'Test Loss')
-    ax_overall.set_title(f'{attribute} Loss Curves')
-    ax_overall.set_xlabel('Epoch')
-    ax_overall.set_ylabel("Loss")
-    ax_overall.set_xticks(epochs)
-    ax_overall.legend()
-    ax_overall.grid(True, alpha=0.2, color='#555')
-    
-    if save_path:
-        plt.savefig(save_path)
-        print(f"Metrics curves saved to {save_path}")
-    plt.close()
+        for (row, col), metric in zip(top_positions, METRICS):
+            ax = fig.add_subplot(gs[row,col])
+            ax.plot(epochs, history[f'train_{metric}_{attribute}'],color="blue",linewidth=2, label=f'train {metric} {attribute}')
+            ax.plot(epochs, history[f'test_{metric}_{attribute}'],color="red",linewidth=2, label=f'test {metric} {attribute}')
+            ax.set_title(f'{attribute} {metric} curve')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel(metric)
+            ax.set_xticks(epochs)
+            ax.legend()
+            ax.grid(True, alpha=0.2, color='#555')
+        ax_overall = fig.add_subplot(gs[2,:])
+        ax_overall.plot(epochs, history[f'train_loss_{attribute}'],color="blue",linewidth=2, label=f'train Loss')
+        ax_overall.plot(epochs, history[f'test_loss_{attribute}'],color="red",linewidth=2, label=f'test Loss')
+        ax_overall.set_title(f'{attribute} loss curve')
+        ax_overall.set_xlabel('Epoch')
+        ax_overall.set_ylabel("loss")
+        ax_overall.set_xticks(epochs)
+        ax_overall.legend()
+        ax_overall.grid(True, alpha=0.2, color='#555')
+        
+        if save_path:
+            plt.savefig(save_path/"attributes_curves"/f"{attribute}_metrics_curves.png")
+            print(f"\n[OK] {attribute} metric curves saved to {save_path/"attributes_curves"/f"{attribute}_metrics_curves.png"}")
+        plt.close()
 
-def plot_metric_curves(history,metric, save_path):
+def plot_metrics_curves(history, metric, nb_epochs, save_path):
     """
     Plot the metric curves for all attributes and save them to a file.
     
@@ -284,60 +284,62 @@ def plot_metric_curves(history,metric, save_path):
     -------
         None
     """
-
-    epochs = range(1, len(history['train_loss']) + 1)
-
-    # plot the loss attributes curves 
+    epochs = list(range(1, nb_epochs+1))
     rows, cols = 3,2
-    top_positions= [(row,col) for row in range(rows-1) for col in range(cols)]
-
     gs = GridSpec(rows, cols, hspace=0.3,wspace=0.3)
+    
+    top_positions= [(row,col) for row in range(rows-1) for col in range(cols)]
     fig = plt.figure(figsize=(14, 10))
 
     for (row, col), attribute in zip(top_positions, ENTITY_ATTRIBUTES.keys()):
         ax = fig.add_subplot(gs[row,col])
-        ax.plot(epochs, history[f'train_{metric}_{attribute}'],color='blue',linewidth=2, label=f'Train {metric} {attribute}')
-        ax.plot(epochs, history[f'test_{metric}_{attribute}'], color='red', linewidth=2, label=f'Test {metric} {attribute}')
+        print(f"Plotting {metric}_{attribute} from history ......")
+        ax.plot(epochs, history[f'train_{metric}_{attribute}'],color="blue",linewidth=2, label=f'train {metric} {attribute}')
+        ax.plot(epochs, history[f'test_{metric}_{attribute}'],color="red",linewidth=2, label=f'test {metric} {attribute}')
         ax.set_title(f'{attribute} {metric} Curves')
         ax.set_xlabel('Epoch')
         ax.set_ylabel(metric)
         ax.set_xticks(epochs)
         ax.legend()
         ax.grid(True, alpha=0.2, color='#555')
-
     ax_overall = fig.add_subplot(gs[2,:])
-    ax_overall.plot(epochs, history[f'train_{metric}'],color='blue',linewidth=2, label=f'Train {metric}')
-    ax_overall.plot(epochs, history[f'test_{metric}'], color='red', linewidth=2, label=f'Test {metric}')
+    print(f"Plotting overall {metric} from history ......")
+    ax_overall.plot(epochs, history[f'train_{metric}'],color="blue",linewidth=2, label=f'train {metric}')
+    ax_overall.plot(epochs, history[f'test_{metric}'],color="red",linewidth=2, label=f'test {metric}')
     ax_overall.set_title(f'Overall {metric} Curves')
     ax_overall.set_xlabel('Epoch')
     ax_overall.set_ylabel(metric)
     ax_overall.set_xticks(epochs)
     ax_overall.legend()
     ax_overall.grid(True, alpha=0.2, color='#555')
-    
+        
     if save_path:
-        plt.savefig(save_path)
-        print(f"Metrics curves saved to {save_path}")
+        plt.savefig(save_path/"metric_curves"/f"{metric}_curves.png")
+        print(f"\n[OK] {metric} curves saved to {save_path/"metric_curves"/f'{metric}_curves.png'}")
     plt.close()
 
 
-def plot_confusion_matrix_attributes(history, splits=["train","test"], attributes=list(ENTITY_ATTRIBUTES.keys()), save_path=None):
-    for attribute in attributes:
-        for split in splits:
-            fig, ax = plot_confusion_matrix(conf_mat=np.asarray(history[f"{split}_confusion_matrix_{attribute}"]), class_names=ENTITY_ATTRIBUTES[f"{attribute}"], figsize=(10, 7));
-            ax.set_title(f'{split} {attribute} Confusion matrix')
-            if save_path:
-                confusion_matrix_path = os.path.join(save_path, f"{split}_{attribute}_confusion_matrix.png")
-                plt.savefig(confusion_matrix_path)
-                print(f"{split} {attribute} Confusion matrix saved to {confusion_matrix_path}")
-            plt.close()
+def plot_confusion_matrices(history,validation_results, attributes=list(ENTITY_ATTRIBUTES.keys()), save_path=None):
 
-    # plot overall confusion matrix for all attributes and all splits
-    for split in splits:
-        fig, ax = plot_confusion_matrix(conf_mat=np.asarray(history[f"{split}_confusion_matrix"]), class_names=attributes, figsize=(10, 7))
-        ax.set_title(f'{split} Overall Confusion matrix')
+    for split in SPLITS:
+        if split == "val":
+            source = validation_results
+        else:
+            source = history
+        for attribute in attributes:
+            attr_conf_mat_name = f"{split}_confusion_matrix_{attribute}"
+            class_names = ENTITY_ATTRIBUTES[f"{attribute}"]
+            fig, ax = plot_confusion_matrix(conf_mat=np.asarray(source[attr_conf_mat_name]), class_names=class_names, figsize=(10, 7))
+            ax.set_title(f'{split} {attribute} Confusion matrix')
+            if save_path: 
+                plt.savefig(save_path/'confusion_matrices'/split/f"{attribute}_confusion_matrix.png")
+                print(f"\n[OK] Confusion matrix for {split} {attribute} saved to {save_path/'confusion_matrices'/split/f'{attribute}_confusion_matrix.png'}")
+            plt.close()
+        all_conf_mat_name = f"{split}_confusion_matrix"
+        all_class_name = [entity_value for entity_values in ENTITY_ATTRIBUTES.values() for entity_value in entity_values]
         if save_path:
-            confusion_matrix_path = os.path.join(save_path, f"{split}_confusion_matrix.png")
-            plt.savefig(confusion_matrix_path)
-            print(f"{split} Overall Confusion matrix saved to {confusion_matrix_path}")
+            fig, ax = plot_confusion_matrix(conf_mat=np.asarray(source[all_conf_mat_name]), class_names=all_class_name, figsize=(14, 10))
+            ax.set_title(f'{split} Overall Confusion matrix')
+            plt.savefig(save_path/'confusion_matrices'/split/f"overall_confusion_matrix.png")
+            print(f"\n[OK] Confusion matrix for {split} overall saved to {save_path/'confusion_matrices'/split/f'overall_confusion_matrix.png'}")
         plt.close()

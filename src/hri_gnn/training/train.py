@@ -4,10 +4,6 @@ Main script to train the cnn encoder model for the RAVEN dataset.
 Usage:
     python -m training.train
 """
-from hri_gnn.config.const import ENTITY_ATTRIBUTES
-import os 
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
 import json
 
 import torch
@@ -24,20 +20,17 @@ from hri_gnn.visualization import oracle
 
 from hri_gnn.utils import paths
 
-OUTPUT_DIR_PATH = paths.get_output_path()
-DATASET_NAME = "raven-20000"
-PERCENTAGE_TO_USE = 0.0025
-NB_EPOCHS = 2
-BATCH_SIZE = 5
-LEARNING_RATE = 1e-4
-LEARNING_DETAILS = True
-METRICS_DETAILED = True
 
+def print_validation_results(validation_results, save_path=None):
+    """
+    Prints the evaluation metrics in a formatted way.
 
-
-
-def print_and_save_validation_results(validation_results):
-    """Prints the evaluation metrics in a formatted way."""
+    Args:
+        validation_results (dict): Dictionary containing the validation results.
+        save_path (Path, optional): Path to save the validation results. Defaults to None.
+    """
+    
+    # Print validation results
     print("\n" + "=" * 60)
     print("  RESULTS ON VALIDATION SET  ")
     print(f" Number: \n  - Crops   : {validation_results['val_num_of_crops']} \n  - Batches : {validation_results['val_num_of_batches']}")
@@ -73,21 +66,23 @@ def print_and_save_validation_results(validation_results):
     print(f"  Color F1 score    : {validation_results['val_f1_color']:.4f}")
     print(f"  Angle F1 score    : {validation_results['val_f1_angle']:.4f}")
     
-    # plot confusion matrix for val results
-    oracle.plot_confusion_matrix_attributes(validation_results,splits=["val"], save_path=OUTPUT_DIR_PATH)
-
     # Saving validation results
-    validation_results_path = os.path.join(OUTPUT_DIR_PATH, "validation_results.json")
-    with open(validation_results_path, 'w') as f:
-        json.dump(validation_results, f, indent=2)
-    print(f"\n  [OK] Validation results saved : {validation_results_path}")
+    if save_path:
+        validation_results_path = save_path/"validation_results.json"
+        with open(validation_results_path, 'w') as f:
+            json.dump(validation_results, f, indent=2)
+        print(f"\n[OK] Validation results saved : {validation_results_path}")
 
 
 # =============================================================================
-# ENTRAÎNEMENT
+# Training Process
 # =============================================================================
 
-def run_training():
+def run_training(dataset_name, percentage_to_use, nb_epochs, batch_size, learning_rate):
+
+    output_path = paths.get_output_path()
+    paths.output_paths(output_path)
+    
     """Configure and run the training process for the CNN encoder model on the RAVEN dataset."""
     
     # Set device
@@ -98,42 +93,42 @@ def run_training():
 
     # 1. Load datasets
 
-    print(f"\nLoading dataset : {DATASET_NAME}")
-    print(f"  Percentage to use : {PERCENTAGE_TO_USE*100}%")
+    print(f"\nLoading dataset : {dataset_name}")
+    print(f"  Percentage to use : {percentage_to_use*100}%")
 
     train_dataset = RavenDataset(
-                        dataset=DATASET_NAME,
+                        dataset=dataset_name,
                         split='train',
-                        percentage_limit=PERCENTAGE_TO_USE)
+                        percentage_limit=percentage_to_use)
     val_dataset = RavenDataset(
-                        dataset=DATASET_NAME,
+                        dataset=dataset_name,
                         split='val',
-                        percentage_limit=PERCENTAGE_TO_USE)
+                        percentage_limit=percentage_to_use)
     test_dataset = RavenDataset(
-                        dataset=DATASET_NAME,
+                        dataset=dataset_name,
                         split='test',
-                        percentage_limit=PERCENTAGE_TO_USE)
+                        percentage_limit=percentage_to_use)
 
     # 2. DataLoaders
 
-    print(f"\nBatch size : {BATCH_SIZE}")
+    print(f"\nBatch size : {batch_size}")
     print(f"Train dataset loaded : {len(train_dataset)} problems")
     print(f"Val dataset loaded : {len(val_dataset)} problems")
     print(f"Test dataset loaded : {len(test_dataset)} problems")
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=BATCH_SIZE,
+        batch_size=batch_size,
         shuffle=True,
         collate_fn=raven_flat_collate)
     val_loader = DataLoader(
         val_dataset,
-        batch_size=BATCH_SIZE,
+        batch_size=batch_size,
         shuffle=False,
         collate_fn=raven_flat_collate)
     test_loader = DataLoader(
         test_dataset,
-        batch_size=BATCH_SIZE,
+        batch_size=batch_size,
         shuffle=False,
         collate_fn=raven_flat_collate)
 
@@ -144,62 +139,55 @@ def run_training():
     
     # 4. Optimizer and Loss
 
-    print(f"\n Optimizer : Adam")
-    print(f" Learning rate : {LEARNING_RATE}")
-    print(f" Loss : CompositeLoss with loss_detailed=True")
-    print(f" Metrics : CompositeMetric with metrics_detailed=True")
+    print(f"\nOptimizer : Adam")
+    print(f" Learning rate : {learning_rate}")
+    print(f" Loss : CompositeLoss ")
+    print(f" Metrics : CompositeMetric")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    criterion = CompositeLoss(loss_detailed=LEARNING_DETAILS)
-    metrics  = CompositeMetric(metrics_detailed=METRICS_DETAILED, device=device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    criterion = CompositeLoss()
+    metrics  = CompositeMetric(device=device)
 
     # 5. Training
     trainer = Trainer(model=model, optimizer=optimizer, criterion=criterion, metrics=metrics, device=device)
-    print(f"epochs={NB_EPOCHS}, batch_size={BATCH_SIZE}, lr={LEARNING_RATE}")
+    print(f"epochs={nb_epochs}, batch_size={batch_size}, lr={learning_rate}")
 
-    checkpoint_dir = os.path.join(OUTPUT_DIR_PATH, "checkpoints")
     with TrainingTimer(model=model) as train_timer:
-        history = trainer.fit(train_loader, test_loader, epochs=NB_EPOCHS, checkpoint_dir=checkpoint_dir, checkpoint_epochs=1)
+        history = trainer.fit(train_loader, test_loader, epochs=nb_epochs, checkpoint_dir=output_path, checkpoint_epochs=1)
     model_training_time = train_timer.elapsed
 
     # 6. Validation
-    val_results = trainer.validate(val_loader)
-    print_and_save_validation_results(val_results)
+    validation_results = trainer.validate(val_loader)
+    print_validation_results(validation_results,save_path=output_path)
 
     # 7. Saving the training history
-    history_path = os.path.join(OUTPUT_DIR_PATH, "training_history.json")
+    history_path = output_path/"training_history.json"
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
-    print(f"\n  [OK] Training history saved : {history_path}")
+    print(f"\n[OK] Training history saved : {history_path}")
 
     # 8. Learning curves
     for metric in METRICS:
         if metric == "confusion_matrix":
-            oracle.plot_confusion_matrix_attributes(history, save_path=OUTPUT_DIR_PATH)
-        curves_path = os.path.join(OUTPUT_DIR_PATH, f"{metric}_curves.png")
-        oracle.plot_metric_curves(history, metric, save_path=curves_path)
+            oracle.plot_confusion_matrices(history, validation_results, save_path=output_path)
+        else:
+            oracle.plot_metrics_curves(history, metric, nb_epochs, save_path=output_path)
     
-    for attribute in ENTITY_ATTRIBUTES:
-        attribute_curves = os.path.join(OUTPUT_DIR_PATH, f"{attribute}_curves.png")
-        oracle.plot_attribute_metrics_curves(history, attribute, save_path=attribute_curves)
+    oracle.plot_attributes_curves(history, nb_epochs, save_path=output_path)
     
 
     # 9. Saving the final model
-    models_dir_path = os.path.join(OUTPUT_DIR_PATH, "models")
-    if not os.path.exists(models_dir_path):
-        os.makedirs(models_dir_path)
-    model_path = os.path.join(models_dir_path, "raven_cnn_encoder_final.pth")
+    model_path = output_path/"models"/"raven_cnn_encoder_final.pth"
     torch.save(model.state_dict(), model_path)
-    print(f"  [OK] Model saved : {model_path}")
+    print(f"\n[OK] Model saved : {model_path}")
 
 
-
-    return history, val_results ,model_training_time
+    return history, validation_results ,model_training_time
 
 
 # =============================================================================
-# POINT D'ENTRÉE
+# ENTRY POINT
 # =============================================================================
 
-if __name__ == "__main__":
-    run_training()
+# if __name__ == "__main__":
+#     run_training()
