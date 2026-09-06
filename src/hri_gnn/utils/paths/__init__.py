@@ -36,8 +36,13 @@ def get_output_path():
     )
 
 def output_paths(output_path):
+    (output_path/"history").mkdir(exist_ok=True)
+    (output_path/"history"/"gnn").mkdir(exist_ok=True)
+    (output_path/"history"/"cnn").mkdir(exist_ok=True)
     (output_path/"confusion_matrices").mkdir(exist_ok=True)
     (output_path/"metric_curves").mkdir(exist_ok=True)
+    (output_path/"metric_curves"/"gnn").mkdir(exist_ok=True)
+    (output_path/"metric_curves"/"cnn").mkdir(exist_ok=True)
     (output_path/"attributes_curves").mkdir(exist_ok=True)
     (output_path / "checkpoints").mkdir(exist_ok=True)
     (output_path / "checkpoints" / "gnn").mkdir(exist_ok=True)

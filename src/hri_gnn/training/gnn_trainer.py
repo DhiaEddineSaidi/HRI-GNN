@@ -198,7 +198,7 @@ class GnnTrainer:
             if self.output_path and check_frequency != 0:
                 prefix  = "gnn_model" if checkpoint_name_prefix is None else "gnn_model_"+checkpoint_name_prefix   
                 if (epoch + 1) % check_frequency == 0:
-                    checkpoint_path = self.output_path / "checkpoints" / f"{prefix}_checkpoint_epoch_{epoch+1}.pth"
+                    checkpoint_path = self.output_path / "checkpoints" /"gnn"/ f"{prefix}_checkpoint_epoch_{epoch+1}.pth"
                     torch.save(self.gnn_model.state_dict(), checkpoint_path)
                     print(f' > Saved checkpoint: {checkpoint_path}')
                     if save_final_version and (epoch + 1) == epochs:
