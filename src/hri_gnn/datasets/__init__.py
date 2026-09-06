@@ -19,12 +19,18 @@ class RavenDataset(torch.utils.data.Dataset):
     
     The dataset yields crops of all panels in the problem, along with attributes and bounding boxes.
     """
-    def __init__(self, dataset:str = "raven-100" , split:str = "train" , percentage_limit:float = 0.1):
+    def __init__(self, dataset:str = "raven-100" , split:str = "train" , percentage_limit:float = 0.1, configs= None):
         self.dataset = dataset
         self.split = split
         self.percentage_limit = percentage_limit
         self.bg_color = 255
         self.index_list = []
+        self.configs=configs if configs is not None else Configuration.all()
+
+        # validate config 
+        for config in self.configs:
+            if config not in Configuration.all():
+                raise ValueError(f"config {config} is not valid. Valid values are {Configuration.all()}")
 
         # validate args
         if SPLITS.index(split) < 0:
@@ -36,7 +42,7 @@ class RavenDataset(torch.utils.data.Dataset):
         dataset_path, length_per_config = paths.get_dataset_path(dataset)
 
         # list of tuples (config, prblm_id) for the passed split
-        for config in [d for d in os.listdir(dataset_path)]:
+        for config in [d for d in os.listdir(dataset_path) if d in self.configs]:
             config_folder_path = dataset_path / config
             xml_files = config_folder_path.glob(f"RAVEN_*_{split}.xml")
             for xml_file in xml_files:
@@ -77,7 +83,7 @@ class RavenDataset(torch.utils.data.Dataset):
         # encoding the config
         config_index = Configuration.all().index(config)
 
-        crops, attributes, bboxes, panel_indices, config_indices, problem_indices = [], [], [], [], [], []
+        crops, attributes, bboxes, panel_indices, config_indices, comp_indices, problem_indices, problem_target = [], [], [], [], [], [], [], []
 
         for panel_idx, panel in enumerate(problem['panels']):
             img_np = panel['image']
@@ -91,6 +97,7 @@ class RavenDataset(torch.utils.data.Dataset):
 
             # 2. crops and labels extraction
             for comp in panel['structure']['components']:
+                comp_id=comp['id']
                 for entity in comp['layout']['entities']:
                     y1, x1, y2, x2 = self._convert_bbox(entity['bbox'])
                     
@@ -108,15 +115,19 @@ class RavenDataset(torch.utils.data.Dataset):
 
                     panel_indices.append(panel_idx)
                     config_indices.append(config_index)
+                    comp_indices.append(comp_id)
                     problem_indices.append(problem_id)
+                    problem_target.append(problem['target']+8)
                     
 
         return (torch.stack(crops),
         torch.tensor(attributes, dtype=torch.float32),
         torch.tensor(bboxes, dtype=torch.float32),
         torch.tensor(panel_indices, dtype=torch.long),
+        torch.tensor(comp_indices, dtype=torch.long),
         torch.tensor(config_indices, dtype=torch.long),
-        torch.tensor(problem_indices, dtype=torch.long))
+        torch.tensor(problem_indices, dtype=torch.long),
+        torch.tensor(problem_target, dtype=torch.long))
 
 
 def raven_flat_collate(batch):
@@ -124,18 +135,22 @@ def raven_flat_collate(batch):
     all_attrs = []
     all_bboxes = []
     all_panel_indices = []
+    all_comp_indices = []
     all_config_indices = []
     all_problem_indices = []
+    all_problem_targets = []
     batch_indices = []
     
     # unstacking the elements
-    for batch_idx, (crops, attrs, bboxes, p_indices, c_indices, pr_indices) in enumerate(batch):
+    for batch_idx, (crops, attrs, bboxes, p_indices, comp_indices, c_indices, pr_indices, pr_target) in enumerate(batch):
         all_crops.append(crops)
         all_attrs.append(attrs)
         all_bboxes.append(bboxes)
         all_panel_indices.append(p_indices)
+        all_comp_indices.append(comp_indices)
         all_config_indices.append(c_indices)
         all_problem_indices.append(pr_indices)
+        all_problem_targets.append(pr_target)
         
         num_nodes = crops.shape[0]
         batch_indices.append(torch.full((num_nodes,), batch_idx, dtype=torch.long))
@@ -143,15 +158,19 @@ def raven_flat_collate(batch):
     flat_crops = torch.cat(all_crops, dim=0)
     flat_attrs = torch.cat(all_attrs, dim=0)
     flat_bboxes = torch.cat(all_bboxes, dim=0)
-    flat_panel_indices = torch.cat(all_panel_indices, dim=0) # Index 0-15
-    flat_config_indices = torch.cat(all_config_indices, dim=0) # Index 0-6
-    flat_problem_indices = torch.cat(all_problem_indices, dim=0) # Idem
-    flat_batch_indices = torch.cat(batch_indices, dim=0)     # Index of the problem in the batch
+    flat_panel_indices = torch.cat(all_panel_indices, dim=0)
+    flat_comp_indices = torch.cat(all_comp_indices, dim=0)
+    flat_config_indices = torch.cat(all_config_indices, dim=0)
+    flat_problem_indices = torch.cat(all_problem_indices, dim=0)
+    flat_problem_targets = torch.cat(all_problem_targets, dim=0)
+    flat_batch_indices = torch.cat(batch_indices, dim=0)
     
     return (flat_crops,
             flat_attrs,
             flat_bboxes, 
             flat_panel_indices,
+            flat_comp_indices,
             flat_config_indices,
-            flat_problem_indices, 
+            flat_problem_indices,
+            flat_problem_targets,
             flat_batch_indices)
