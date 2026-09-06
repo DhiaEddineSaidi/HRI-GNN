@@ -222,7 +222,7 @@ def plot_panel_crops(panel_crops):
     plt.tight_layout()
     plt.show()
 
-def plot_crops(crops):
+def plot_crop(crops):
     fig, axes = plt.subplots(1, len(crops), figsize=(2*len(crops), 2))
     if len(crops) > 1 :
         axes = axes.flatten()
