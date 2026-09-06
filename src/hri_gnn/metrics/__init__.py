@@ -210,3 +210,31 @@ class TrainingTimer:
       print(f"{self.model.__class__.__name__} training session took: {int(minutes)}m {int(secs)}s")
       return False
 
+
+def gnn_accuracy(scores_per_problem, y_batch, candidate_ids):
+  """
+  Compute the accuracy of the GNN model for the RAVEN dataset.
+
+  Parameters
+  ----------
+  scores_per_problem : list[torch.Tensor]
+    A list of scores for each problem in the batch.
+  y_batch : torch.Tensor
+    The batch vector containing the target candidate IDs.
+  candidate_ids : list[int]
+    The candidate IDs for each problem in the batch.
+
+  Returns
+  -------
+  float
+    The accuracy of the GNN model for the RAVEN dataset.
+  """
+  candidate_ids = list(candidate_ids)
+  n_correct = 0
+  for i, scores in enumerate(scores_per_problem):
+    predicted_index = scores.argmax().item()
+    predicted_candidate_id = candidate_ids[predicted_index]
+    target_candidate_id = y_batch[i].item()
+    if predicted_candidate_id == target_candidate_id:
+      n_correct += 1
+  return n_correct
