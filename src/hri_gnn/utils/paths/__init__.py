@@ -40,6 +40,8 @@ def output_paths(output_path):
     (output_path/"metric_curves").mkdir(exist_ok=True)
     (output_path/"attributes_curves").mkdir(exist_ok=True)
     (output_path / "checkpoints").mkdir(exist_ok=True)
+    (output_path / "checkpoints" / "gnn").mkdir(exist_ok=True)
+    (output_path / "checkpoints" / "cnn").mkdir(exist_ok=True)
     (output_path / "models").mkdir(exist_ok=True)
     for split in SPLITS:
         (output_path/"confusion_matrices"/split).mkdir(exist_ok=True)
