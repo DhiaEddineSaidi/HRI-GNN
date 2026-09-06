@@ -168,7 +168,7 @@ def read_config_id_problem(config, prblm_id, dataset="raven-100"):
     # Get images and target from npz file
     with np.load(problem_npz_file_path, allow_pickle=True) as ref_npz:
         images = ref_npz['image']
-        problem['target'] = ref_npz['target']
+        problem['target'] = ref_npz['target'].item()
 
     xml_tree = parse(problem_xml_file_path)
     panels, rules = problem_builder(images, xml_tree)
