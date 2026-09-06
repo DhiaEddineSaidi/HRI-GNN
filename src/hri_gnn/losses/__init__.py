@@ -1,4 +1,7 @@
+import torch 
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 class CompositeLoss(nn.Module):
 
@@ -74,3 +77,27 @@ class CompositeLoss(nn.Module):
           return {
             "loss":composite_loss
           }
+
+
+def compute_candidate_loss(scores: torch.Tensor, y: torch.Tensor, candidate_ids)-> torch.Tensor:
+    """
+    Computes the cross-entropy loss for the candidate prediction.
+    
+    Args:
+      scores: torch.Tensor of shape (number of candidates, 1)
+      y: torch.Tensor of shape (1,) containing the true candidate id
+      candidate_ids: list of candidate ids
+      
+    Returns:
+      torch.Tensor of shape (1,) containing the loss
+    """
+    # print(f"\n\nSCores {scores}")
+    # print(f"Y {y}")
+    # print(f"Candidate ids {candidate_ids}")
+    candidate_ids = list(candidate_ids)
+    target_candidate_id = y.item()
+    target_index = candidate_ids.index(target_candidate_id)
+    target_index_tensor = torch.tensor([target_index]).to(y.device)
+    loss = F.cross_entropy(scores.unsqueeze(0), target_index_tensor)
+
+    return loss
