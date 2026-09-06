@@ -1,4 +1,4 @@
-import ast
+import json
 from xml.etree.ElementTree import parse
 from typing import Any
 
@@ -54,14 +54,14 @@ def problem_builder(images: list, xml_tree) -> tuple[list[dict], list[dict]]:
             layout: dict = {}
             layout['name'] = layout_tag.attrib['name']
             layout['Number'] = int(layout_tag.attrib['Number'])
-            layout['Position'] = ast.literal_eval(layout_tag.attrib['Position'])
+            layout['Position'] = json.loads(layout_tag.attrib['Position'])
             layout['Uniformity'] = True if int(layout_tag.attrib["Uniformity"]) == 3 else False
             entities = []
             for entity_tag in layout_tag:
                 entity: dict = {}
-                entity["bbox"]= ast.literal_eval(entity_tag.attrib["bbox"])
-                entity["real_bbox"]= ast.literal_eval(entity_tag.attrib["real_bbox"])
-                #entity["mask"]= ast.literal_eval(entity_tag.attrib["mask"])
+                entity["bbox"]= json.loads(entity_tag.attrib["bbox"])
+                entity["real_bbox"]= json.loads(entity_tag.attrib["real_bbox"])
+                #entity["mask"]= json.loads(entity_tag.attrib["mask"])
                 entity["Type"]= int(entity_tag.attrib["Type"])
                 entity["Size"]= int(entity_tag.attrib["Size"])
                 entity["Color"]= int(entity_tag.attrib["Color"])
@@ -151,6 +151,10 @@ def read_config_id_problem(config, prblm_id, dataset="raven-100"):
     if not (problem_xml_file_path.exists() and problem_npz_file_path.exists()) :
         raise FileNotFoundError(f"Problem files (one of them or both) not found in {config} config in the dataset: {dataset}")
     
+    return read_problem_from_paths(problem_xml_file_path, problem_npz_file_path, config, prblm_id, dataset)
+
+def read_problem_from_paths(problem_xml_file_path, problem_npz_file_path, config, prblm_id, dataset="raven-100"):
+    """Reads an rpm problem from explicit file paths."""
     # problem split
     xml_split = problem_xml_file_path.stem.split("_")[-1]
     npz_splt = problem_npz_file_path.stem.split("_")[-1]

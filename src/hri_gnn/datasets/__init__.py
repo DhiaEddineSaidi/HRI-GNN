@@ -47,7 +47,9 @@ class RavenDataset(torch.utils.data.Dataset):
             xml_files = config_folder_path.glob(f"RAVEN_*_{split}.xml")
             for xml_file in xml_files:
                 problem_id = xml_file.stem.split('_')[1]
-                self.index_list.append((config, int(problem_id)))
+                npz_file = xml_file.with_suffix('.npz')
+                config_idx = Configuration.all().index(config)
+                self.index_list.append((config, config_idx, int(problem_id), xml_file, npz_file))
                 
         if self.percentage_limit != 1.0:
             # calculate the limit number of problems to take from each config
@@ -77,22 +79,21 @@ class RavenDataset(torch.utils.data.Dataset):
                     img_out[y1:y2, x1:x2] = self.bg_color
 
     def __getitem__(self, index):
-        config, problem_id = self.index_list[index]
-        problem = readers.read_config_id_problem(config, int(problem_id), self.dataset)
+        config, config_index, problem_id, xml_path, npz_path = self.index_list[index]
+        problem = readers.read_problem_from_paths(xml_path, npz_path, config, int(problem_id), self.dataset)
         
-        # encoding the config
-        config_index = Configuration.all().index(config)
-
         crops, attributes, bboxes, panel_indices, config_indices, comp_indices, problem_indices, problem_target = [], [], [], [], [], [], [], []
 
         for panel_idx, panel in enumerate(problem['panels']):
             img_np = panel['image']
             struct_name = panel['structure']['name']
-            img_out = img_np.copy()
             
             # 1. Erasing inner crops (shapes) for the case where structure= "Out_In"
             if struct_name == 'Out_In':
+                img_out = img_np.copy()
                 self._erasing_inner_crops(panel, img_out)
+            else:
+                img_out = img_np
                
 
             # 2. crops and labels extraction
