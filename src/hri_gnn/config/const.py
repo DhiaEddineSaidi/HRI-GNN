@@ -4,6 +4,9 @@
 
 from enum import Enum
 
+# CNN Latent vector size
+LATENT_DIM = 64
+
 # RAVEN image size (in pixels)
 INPUT_IMAGE_SIZE = 160
 OUTPUT_IMAGE_CROP_SIZE = 80
@@ -65,3 +68,34 @@ RULE_ATTRIBUTES = ["Number/Position", "Type", "Size", "Color"]
 
 # Supported metrics
 METRICS = ["accuracy", "precision", "recall", "f1", "confusion_matrix"]
+
+# slot table
+# (config_id, component_id)
+SLOT_TABLE = {
+    (0,0):[[0.5, 0.5, 1, 1]],
+    (1,0):[[0.25, 0.25, 0.5, 0.5], [0.25, 0.75, 0.5, 0.5], [0.75, 0.25, 0.5, 0.5], [0.75, 0.75, 0.5, 0.5]],
+    (2,0):[[0.16, 0.16, 0.33, 0.33], [0.16, 0.5, 0.33, 0.33], [0.16, 0.83, 0.33, 0.33], [0.5, 0.16, 0.33, 0.33], [0.5, 0.5, 0.33, 0.33], [0.5, 0.83, 0.33, 0.33], [0.83, 0.16, 0.33, 0.33], [0.83, 0.5, 0.33, 0.33], [0.83, 0.83, 0.33, 0.33]],
+    (3,0):[[0.5, 0.5, 1, 1]],
+    (3,1):[[0.5, 0.5, 0.33, 0.33]],
+    (4,0):[[0.5, 0.5, 1, 1]],
+    (4,1):[[0.42, 0.42, 0.15, 0.15], [0.42, 0.58, 0.15, 0.15], [0.58, 0.42, 0.15, 0.15], [0.58, 0.58, 0.15, 0.15]],
+    (5,0):[[0.5, 0.25, 0.5, 0.5]],
+    (5,1):[[0.5, 0.75, 0.5, 0.5]],
+    (6,0):[[0.25, 0.5, 0.5, 0.5]],
+    (6,1):[[0.75, 0.5, 0.5, 0.5]]
+}
+
+MAX_SLOTS = max(len(v) for v in SLOT_TABLE.values())
+
+GRAPH_NODE_TYPES = {
+    "entity" : LATENT_DIM + len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"]),
+    "layout" : LATENT_DIM +len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"]) + MAX_SLOTS + 1 + 1
+}
+
+GRAPH_EDGE_TYPES = {
+    ('entity', 'intra_panel', 'entity') : 2 , # delta_x, delta_y
+    ('entity', 'inter_panel_entity', 'entity'): 1 + len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"]),
+    ('layout', 'inter_panel_layout', 'layout'): 5, # dierction ,delta_number, n_common, n_added, n_removed
+    ('entity', 'belongs_to', 'layout') : 1, 
+    ('layout', 'contains', 'entity') : 1
+}
