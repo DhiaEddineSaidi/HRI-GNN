@@ -7,7 +7,7 @@ from tqdm.auto import tqdm
 from hri_gnn.config.const import ENTITY_ATTRIBUTES
 
 
-class Trainer:
+class CnnTrainer:
     """
     Trainer for the RavenCnnEncoder model.
 

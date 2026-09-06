@@ -2,7 +2,7 @@
 Main script to train the cnn encoder model for the RAVEN dataset.
 
 Usage:
-    python -m training.train
+    python -m hri_gnn.trainers.train_cnn
 """
 import json
 
@@ -13,7 +13,7 @@ from hri_gnn.datasets import RavenDataset , raven_flat_collate
 from hri_gnn.models.cnn_encoder import RavenCnnEncoder
 from hri_gnn.losses import CompositeLoss
 from hri_gnn.metrics import CompositeMetric, TrainingTimer
-from hri_gnn.training.trainer import Trainer
+from hri_gnn.trainers.cnn_trainer import CnnTrainer
 from hri_gnn.config.const import METRICS
 
 from hri_gnn.visualization import oracle
@@ -149,7 +149,7 @@ def run_training(dataset_name, percentage_to_use, nb_epochs, check_frequency, ba
     metrics  = CompositeMetric(device=device)
 
     # 5. Training
-    trainer = Trainer(model=model, optimizer=optimizer, criterion=criterion, metrics=metrics, device=device)
+    trainer = CnnTrainer(model=model, optimizer=optimizer, criterion=criterion, metrics=metrics, device=device)
     print(f"epochs={nb_epochs}, batch_size={batch_size}, lr={learning_rate}")
 
     with TrainingTimer(model=model) as train_timer:
