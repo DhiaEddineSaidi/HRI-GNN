@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from tqdm.auto import tqdm
 
-from hri_gnn.models import graph_builder_v2 as gb
+from hri_gnn.models import graph_builder as gb
 from hri_gnn.metrics import gnn_accuracy
 
 from hri_gnn.config.const import GRAPH_NODE_TYPES, GRAPH_EDGE_TYPES
@@ -49,7 +49,7 @@ class GnnTrainer:
         self.optimizer.zero_grad()
 
         # forward pass through the GNN model (message passing, scoring and loss)
-        n_problems = len(keys_order)
+        n_problems = len(keys_order) // len(self.gnn_model.candidate_ids)
         scores_per_problem, losses_per_problem, mean_loss = self.gnn_model(pyg_batch, batched_layout_keys, n_problems)
         
         # compute accuracy
@@ -96,7 +96,7 @@ class GnnTrainer:
         self.gnn_model.eval()
 
         # forward pass through the GNN model (message passing, scoring and loss)
-        n_problems = len(keys_order)
+        n_problems = len(keys_order) // len(self.gnn_model.candidate_ids)
         with torch.inference_mode():
             scores_per_problem, losses_per_problem, mean_loss = self.gnn_model(pyg_batch, batched_layout_keys, n_problems)
         

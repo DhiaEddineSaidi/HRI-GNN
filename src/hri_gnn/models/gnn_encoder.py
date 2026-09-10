@@ -4,7 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torch_geometric.nn import HeteroConv, GINEConv
+from torch_geometric.nn import HeteroConv, GINEConv, global_add_pool
+from torch_geometric.utils import softmax
 
 from hri_gnn.losses import compute_candidate_loss
 from hri_gnn.config.const import GRAPH_EDGE_TYPES
@@ -55,7 +56,9 @@ class RavenGnnEncoder(nn.Module):
         node_types= list(in_dims.keys())
 
         self.edge_norms = nn.ModuleDict({
-            f"{edge_type[0]}_{edge_type[1]}_{edge_type[2]}" : nn.LayerNorm(GRAPH_EDGE_TYPES[edge_type]) for edge_type in self.active_edge_types
+            f"{edge_type[0]}_{edge_type[1]}_{edge_type[2]}" : 
+                nn.LayerNorm(GRAPH_EDGE_TYPES[edge_type]) if GRAPH_EDGE_TYPES[edge_type] > 1 else nn.Identity()
+            for edge_type in self.active_edge_types
         })
 
         self.convs = nn.ModuleList()
@@ -91,21 +94,18 @@ class RavenGnnEncoder(nn.Module):
             
         return h_dict
 
-class AttentionPooling(nn.Module):
-    def __init__(self, hidden_dim:int):
+class BatchedAttentionPooling(nn.Module):
+    def __init__(self, hidden_dim: int):
         super().__init__()
-        self.attention_score = nn.Linear(hidden_dim,1)
+        self.attention_score = nn.Linear(hidden_dim, 1)
 
-    def forward(self, h_stack: torch.Tensor)-> torch.Tensor:
-        """
-        Args:
-          h_stack: torch.Tensor of shape (number of nodes, hidden_dim), a candidate might have 1 or 2 layout nodes
-        Returns:
-          torch.Tensor of shape (hidden_dim,)
-        """
-        scores = self.attention_score(h_stack)
-        weights = torch.softmax(scores, dim=0)
-        pooled = (weights*h_stack).sum(dim=0)
+    def forward(self, h: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
+        # h: (N_total_candidate_layout_nodes, hidden_dim)
+        # batch: (N_total_candidate_layout_nodes,) - tells us which graph each node belongs to
+        
+        scores = self.attention_score(h) # (N, 1)
+        weights = softmax(scores, batch) # (N, 1) - softmax applied per graph!
+        pooled = global_add_pool(weights * h, batch) # (Total_Graphs, hidden_dim)
         return pooled
 
 def group_layouts_by_panel(layout_keys):
@@ -116,57 +116,55 @@ def group_layouts_by_panel(layout_keys):
     return dict(layouts_grouped_by_panel)
 
 class CandidateScorer(nn.Module):
-    def __init__(self, hidden_dim:int):
+    def __init__(self, hidden_dim: int):
         super().__init__()
-        self.pooling = AttentionPooling(hidden_dim)
+        self.pooling = BatchedAttentionPooling(hidden_dim)
         self.score_mlp = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim//2),
+            nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
-            nn.Linear(hidden_dim//2, 1)
+            nn.Linear(hidden_dim // 2, 1)
         )
     
-    def forward(self, layout_embeddings, layout_keys, candidate_ids, return_dict = False):
-        """
-        Args:
-          layout_embeddings: torch.Tensor of shape (number of layout nodes, hidden_dim)
-          layout_keys: list of tuples of (panel_id, component_id) for each layout node
-        Returns:
-          torch.Tensor of shape (number of candidates, hidden_dim)
-        """
-        layouts_grouped_by_panel = group_layouts_by_panel(layout_keys)
-
-        candidates_scores = []
-        for c in candidate_ids:
-            candidate_layout_local_indices = layouts_grouped_by_panel[c]
-            h_stack = layout_embeddings[candidate_layout_local_indices]
-            pooled_h = self.pooling(h_stack)
-            score = self.score_mlp(pooled_h)
-            candidates_scores.append(score)  
-        scores_tensor = torch.cat(candidates_scores)
-
-        if not return_dict:
-            return scores_tensor
+    def forward(self, h_layout, layout_keys, layout_batch_vector):
+        # 1. Create a boolean mask for all layout nodes across the entire batch where panel_id == 8
+        candidate_mask = torch.tensor([p == 8 for (p, c) in layout_keys], dtype=torch.bool, device=h_layout.device)
         
-        scores_dict = {c: scores_tensor[i].item()  for i,c in enumerate(candidate_ids)}
-        return scores_tensor, scores_dict
+        # 2. Extract only the candidate layout nodes and their corresponding graph batch indices
+        h_candidates = h_layout[candidate_mask]
+        batch_candidates = layout_batch_vector[candidate_mask]
+        
+        # 3. Batched Pooling (processes all 8*N graphs at once!)
+        # Size parameter guarantees the output tensor has shape (Total_Graphs, hidden_dim)
+        # even if a graph miraculously has no candidate node
+        num_graphs = layout_batch_vector.max().item() + 1 if layout_batch_vector.numel() > 0 else 0
+        pooled_h = self.pooling(h_candidates, batch_candidates)
+        
+        if pooled_h.size(0) < num_graphs:
+            # Pad with zeros if the last graph(s) didn't have any candidate nodes
+            padding = torch.zeros(num_graphs - pooled_h.size(0), pooled_h.size(1), device=pooled_h.device)
+            pooled_h = torch.cat([pooled_h, padding], dim=0)
+
+        # 4. Batched MLP scoring
+        scores = self.score_mlp(pooled_h) # (Total_Graphs, 1)
+        return scores.squeeze(-1)
 
 def score_and_loss_for_batch(h_layout: torch.Tensor, layout_batch_vector: torch.Tensor, batched_layout_keys, y_batch:torch.Tensor, scorer:"CandidateScorer", candidate_ids, n_problems: int):
+    
+    # Get scores for all graphs at once (shape: [n_problems * 8])
+    all_scores = scorer(h_layout, batched_layout_keys, layout_batch_vector)
+    
+    # Reshape to (n_problems, 8)
+    scores_reshaped = all_scores.view(n_problems, 8)
     
     candidate_ids = list(candidate_ids)
     scores_per_problem = []
     losses_per_problem = []
-
+    
     for problem_pos in range(n_problems):
-        node_mask = (layout_batch_vector == problem_pos)
-        node_indices = node_mask.nonzero(as_tuple= True)[0]
-
-        h_layout_this_problem = h_layout[node_indices]
-        layout_keys_this_problem = [batched_layout_keys[i] for i in node_indices.tolist()]
-
-        scores = scorer(h_layout_this_problem, layout_keys_this_problem, candidate_ids)
-        y = y_batch[problem_pos].view(1)
+        scores = scores_reshaped[problem_pos]
+        y = y_batch[problem_pos * len(candidate_ids)].view(1)
         loss = compute_candidate_loss(scores, y, candidate_ids)
-
+        
         scores_per_problem.append(scores)
         losses_per_problem.append(loss)
     

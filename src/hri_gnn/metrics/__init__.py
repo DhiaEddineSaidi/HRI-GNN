@@ -234,7 +234,7 @@ def gnn_accuracy(scores_per_problem, y_batch, candidate_ids):
   for i, scores in enumerate(scores_per_problem):
     predicted_index = scores.argmax().item()
     predicted_candidate_id = candidate_ids[predicted_index]
-    target_candidate_id = y_batch[i].item()
+    target_candidate_id = y_batch[i * len(candidate_ids)].item()
     if predicted_candidate_id == target_candidate_id:
       n_correct += 1
   return n_correct

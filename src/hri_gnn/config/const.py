@@ -93,9 +93,9 @@ GRAPH_NODE_TYPES = {
 }
 
 GRAPH_EDGE_TYPES = {
-    ('entity', 'intra_panel', 'entity') : 2 , # delta_x, delta_y
+    ('entity', 'intra_panel', 'entity') : 1 + 1 , # delta_x, delta_y
     ('entity', 'inter_panel_entity', 'entity'): 1 + len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"]),
-    ('layout', 'inter_panel_layout', 'layout'): 5, # dierction ,delta_number, n_common, n_added, n_removed
+    ('layout', 'inter_panel_layout', 'layout'): 1 + 1 + MAX_SLOTS + LATENT_DIM + len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"]), # direction, delta_number, occ_mask_delta (MAX_SLOTS dim) + letent dim + dim logits type + dim logits size + dim logits color
     ('entity', 'belongs_to', 'layout') : 1, 
     ('layout', 'contains', 'entity') : 1
 }
