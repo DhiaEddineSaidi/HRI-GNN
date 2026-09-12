@@ -238,3 +238,70 @@ def gnn_accuracy(scores_per_problem, y_batch, candidate_ids):
     if predicted_candidate_id == target_candidate_id:
       n_correct += 1
   return n_correct
+
+
+def gnn_predictions(scores_per_problem, y_batch, candidate_ids):
+  """
+  Returns (predicted_labels, true_labels) as 0-indexed tensors (0 = candidate 8, ..., 7 = candidate 15).
+  Used for computing precision, recall, F1 and confusion matrix.
+  """
+  candidate_ids = list(candidate_ids)
+  preds, targets = [], []
+  for i, scores in enumerate(scores_per_problem):
+    predicted_index = scores.argmax().item()
+    target_candidate_id = y_batch[i * len(candidate_ids)].item()
+    true_index = candidate_ids.index(target_candidate_id)
+    preds.append(predicted_index)
+    targets.append(true_index)
+  return torch.tensor(preds), torch.tensor(targets)
+
+
+class GnnMetrics:
+  """
+  Accumulates GNN candidate-selection predictions over an entire epoch, then
+  computes precision, recall, F1 (macro) and confusion matrix.
+
+  Usage:
+    metrics = GnnMetrics(num_candidates=8)
+    # inside training loop, after each batch:
+    metrics.update(scores_per_problem, pyg_batch.y, candidate_ids)
+    # after the epoch:
+    results = metrics.compute()   # dict with all metrics
+    metrics.reset()               # clear for next epoch
+  """
+  def __init__(self, num_candidates: int = 8):
+    self.num_candidates = num_candidates
+    self.reset()
+
+  def reset(self):
+    self._all_preds = []
+    self._all_targets = []
+
+  def update(self, scores_per_problem, y_batch, candidate_ids):
+    preds, targets = gnn_predictions(scores_per_problem, y_batch, candidate_ids)
+    self._all_preds.append(preds)
+    self._all_targets.append(targets)
+
+  def compute(self) -> dict:
+    """
+    Returns a dict with:
+      - 'precision'        : macro-averaged precision (float)
+      - 'recall'           : macro-averaged recall (float)
+      - 'f1'               : macro-averaged F1 (float)
+      - 'confusion_matrix' : (num_candidates x num_candidates) tensor
+    """
+    preds   = torch.cat(self._all_preds)
+    targets = torch.cat(self._all_targets)
+    n = self.num_candidates
+
+    precision_fn = MulticlassPrecision(num_classes=n, average='macro')
+    recall_fn    = MulticlassRecall(num_classes=n, average='macro')
+    f1_fn        = MulticlassF1Score(num_classes=n, average='macro')
+    cm_fn        = MulticlassConfusionMatrix(num_classes=n)
+
+    return {
+      'precision':        precision_fn(preds, targets).item(),
+      'recall':           recall_fn(preds, targets).item(),
+      'f1':               f1_fn(preds, targets).item(),
+      'confusion_matrix': cm_fn(preds, targets),
+    }

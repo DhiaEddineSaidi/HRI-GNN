@@ -28,35 +28,41 @@ class InputProjetcion(nn.Module):
     def forward(self, x_dict):
         return {node_type: self.proj[node_type](x) for node_type, x in x_dict.items()}
 
-def gine_mlp(hidden_dim: int):
+def gine_mlp(hidden_dim: int, dropout: float = 0.0):
     """
     Returns an MLP used in GINE layers.
     MLP is applied to the concatenated hidden features of the central node and its neighbors.
+    Args:
+        hidden_dim: dimension of node embeddings
+        dropout: dropout probability applied after ReLU (0.0 = disabled)
     """
     return nn.Sequential(
         nn.Linear(hidden_dim, hidden_dim),
         nn.ReLU(),
+        nn.Dropout(p=dropout),
         nn.Linear(hidden_dim, hidden_dim),
     )
 
 class RavenGnnEncoder(nn.Module):
-    def __init__(self, in_dims: dict , hidden_dim:int ,num_layers:int, active_edge_types= None):
+    def __init__(self, in_dims: dict, hidden_dim: int, num_layers: int, active_edge_types=None, dropout: float = 0.0):
         """
         Args:
           in_dims: {'entity': in_dim_entity, 'layout': in_dim_layout}
           hidden_dim: hidden dimension of node embeddings
           num_layers: number of HeteroConv layers
           active_edge_types: list of tuples of edge types to consider (default: all)
+          dropout: dropout probability applied between GNN layers (0.0 = disabled)
         """
         super().__init__()
 
-        self.active_edge_types = {k :v for k,v in GRAPH_EDGE_TYPES.items() if k in active_edge_types} if active_edge_types is not None else GRAPH_EDGE_TYPES
+        self.active_edge_types = {k: v for k, v in GRAPH_EDGE_TYPES.items() if k in active_edge_types} if active_edge_types is not None else GRAPH_EDGE_TYPES
+        self.dropout = nn.Dropout(p=dropout)
 
         self.input_proj = InputProjetcion(in_dims, hidden_dim)
-        node_types= list(in_dims.keys())
+        node_types = list(in_dims.keys())
 
         self.edge_norms = nn.ModuleDict({
-            f"{edge_type[0]}_{edge_type[1]}_{edge_type[2]}" : 
+            f"{edge_type[0]}_{edge_type[1]}_{edge_type[2]}": 
                 nn.LayerNorm(GRAPH_EDGE_TYPES[edge_type]) if GRAPH_EDGE_TYPES[edge_type] > 1 else nn.Identity()
             for edge_type in self.active_edge_types
         })
@@ -67,7 +73,7 @@ class RavenGnnEncoder(nn.Module):
         for _ in range(num_layers):
             conv_dict = {}
             for edge_type, edge_dim in self.active_edge_types.items():
-                conv_dict[edge_type] = GINEConv(nn=gine_mlp(hidden_dim), edge_dim=edge_dim)
+                conv_dict[edge_type] = GINEConv(nn=gine_mlp(hidden_dim, dropout=dropout), edge_dim=edge_dim)
             self.convs.append(HeteroConv(conv_dict, aggr="sum"))
             self.norms.append(nn.ModuleDict({
                 node_type: nn.LayerNorm(hidden_dim) for node_type in node_types
@@ -77,11 +83,13 @@ class RavenGnnEncoder(nn.Module):
         h_dict = self.input_proj(x_dict)
         
         active_edge_index_dict = {edge_type: edge_index_dict[edge_type] for edge_type in self.active_edge_types.keys()}
-        active_edge_attr_dict  = {
-            edge_type: self.edge_norms[f"{edge_type[0]}_{edge_type[1]}_{edge_type[2]}"](edge_attr_dict[edge_type]) for edge_type in self.active_edge_types.keys()}
+        active_edge_attr_dict = {
+            edge_type: self.edge_norms[f"{edge_type[0]}_{edge_type[1]}_{edge_type[2]}"](edge_attr_dict[edge_type])
+            for edge_type in self.active_edge_types.keys()
+        }
 
         for layer_idx, conv in enumerate(self.convs):
-            is_last_layer = (layer_idx == len(self.convs)-1)
+            is_last_layer = (layer_idx == len(self.convs) - 1)
             h_dict_new = conv(h_dict, active_edge_index_dict, active_edge_attr_dict)
             for node_type in h_dict:
                 if node_type not in h_dict_new:
@@ -90,6 +98,7 @@ class RavenGnnEncoder(nn.Module):
                     h_dict_new[node_type] = self.norms[layer_idx][node_type](h_dict_new[node_type])
                     if not is_last_layer:
                         h_dict_new[node_type] = F.relu(h_dict_new[node_type])
+                        h_dict_new[node_type] = self.dropout(h_dict_new[node_type])
             h_dict = h_dict_new
             
         return h_dict
@@ -173,26 +182,35 @@ def score_and_loss_for_batch(h_layout: torch.Tensor, layout_batch_vector: torch.
 
 class RavenGnnModel(nn.Module):
 
-
-    def __init__(self, in_dims:dict , hidden_dim:int , num_layers:int, active_edge_types=None, candidate_ids=range(8,16)):
+    def __init__(self, in_dims: dict, hidden_dim: int, num_layers: int, active_edge_types=None, candidate_ids=range(8, 16), dropout: float = 0.0):
+        """
+        Args:
+          in_dims: {'entity': in_dim_entity, 'layout': in_dim_layout}
+          hidden_dim: hidden dimension of node embeddings
+          num_layers: number of GNN layers
+          active_edge_types: edge types to use (default: all)
+          candidate_ids: candidate panel IDs in the dataset (default: 8-15)
+          dropout: dropout probability for regularization (0.0 = disabled)
+        """
         super().__init__()
 
         self.in_dims = in_dims
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
-        self.active_edge_types = {k :v for k,v in GRAPH_EDGE_TYPES.items() if k in active_edge_types} if active_edge_types is not None else GRAPH_EDGE_TYPES
+        self.dropout = dropout
+        self.active_edge_types = {k: v for k, v in GRAPH_EDGE_TYPES.items() if k in active_edge_types} if active_edge_types is not None else GRAPH_EDGE_TYPES
         self.candidate_ids = list(candidate_ids)
         
-        self.gnn_encoder = RavenGnnEncoder(self.in_dims, self.hidden_dim, self.num_layers, self.active_edge_types)
+        self.gnn_encoder = RavenGnnEncoder(self.in_dims, self.hidden_dim, self.num_layers, self.active_edge_types, dropout=dropout)
         self.candidate_scorer = CandidateScorer(self.hidden_dim)
 
     def forward(self, pyg_batch, batched_layout_keys, n_problems):
 
-        x_dict = {'entity': pyg_batch['entity'].x , 'layout': pyg_batch['layout'].x }
-        edge_index_dict = {edge_type : pyg_batch[edge_type].edge_index for edge_type in self.active_edge_types.keys()}
-        edge_attr_dict = {edge_type : pyg_batch[edge_type].edge_attr for edge_type in self.active_edge_types.keys()}
+        x_dict = {'entity': pyg_batch['entity'].x, 'layout': pyg_batch['layout'].x}
+        edge_index_dict = {edge_type: pyg_batch[edge_type].edge_index for edge_type in self.active_edge_types.keys()}
+        edge_attr_dict = {edge_type: pyg_batch[edge_type].edge_attr for edge_type in self.active_edge_types.keys()}
         
         h_dict = self.gnn_encoder(x_dict, edge_index_dict, edge_attr_dict)
 
-        return score_and_loss_for_batch(h_dict['layout'], pyg_batch['layout'].batch, batched_layout_keys, 
+        return score_and_loss_for_batch(h_dict['layout'], pyg_batch['layout'].batch, batched_layout_keys,
                                         pyg_batch.y, self.candidate_scorer, self.candidate_ids, n_problems)

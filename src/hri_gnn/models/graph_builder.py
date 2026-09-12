@@ -55,7 +55,7 @@ def group_entities_by_problem(flat_config_indices, flat_problem_indices, flat_ba
     key = (flat_config_indices[i].item(), flat_problem_indices[i].item(), flat_batch_indices[i].item())
     entities_by_problem[key].append(i)
 
-  return {k: torch.tensor(v, dtype=torch.long) for k,v in entities_by_problem.items()}
+  return {k: torch.tensor(v, dtype=torch.long, device=flat_batch_indices.device) for k,v in entities_by_problem.items()}
 
 def entities_slot_ids(graph_candidate_indices, flat_bboxes, flat_config_indices, flat_component_indices, slot_table=SLOT_TABLE):
     """
@@ -152,11 +152,11 @@ def build_intra_panel_entity_edges(entity_meta):
             attr_list += [[dy, dx],[-dy, -dx]]
             
     if not src_list:
-        edge_index = torch.empty((2,0), dtype =torch.long)
-        edge_attr = torch.empty((0,2), dtype=torch.float)
+        edge_index = torch.empty((2,0), dtype =torch.long, device=entity_meta['panel_id'].device)
+        edge_attr = torch.empty((0,2), dtype=torch.float, device=entity_meta['panel_id'].device)
     else:
-        edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
-        edge_attr = torch.tensor(attr_list, dtype=torch.float)
+        edge_index = torch.tensor([src_list, dst_list], dtype=torch.long, device=entity_meta['panel_id'].device)
+        edge_attr = torch.tensor(attr_list, dtype=torch.float, device=entity_meta['panel_id'].device)
         
     return edge_index, edge_attr
 
@@ -224,17 +224,17 @@ def build_inter_panel_entity_edges(entity_meta, entity_x, problem_entities_group
                 # forward: panel_source > panel_detination
                 src_list.append(i)
                 dst_list.append(j)
-                attr_list.append(torch.cat([torch.tensor([1.0]), delta_fwd]))
+                attr_list.append(torch.cat([torch.tensor([1.0], device=entity_x.device), delta_fwd]))
                 # backward: panel_source < panel_detination
                 src_list.append(j)
                 dst_list.append(i)
-                attr_list.append(torch.cat([torch.tensor([-1.0]), delta_bwd]))
+                attr_list.append(torch.cat([torch.tensor([-1.0], device=entity_x.device), delta_bwd]))
 
     if not src_list:
-        edge_index = torch.empty((2,0), dtype=torch.long)
-        edge_attr = torch.empty((0,1 + n_type + n_size + n_color) , dtype=torch.float)
+        edge_index = torch.empty((2,0), dtype=torch.long, device=entity_x.device)
+        edge_attr = torch.empty((0,1 + n_type + n_size + n_color) , dtype=torch.float, device=entity_x.device)
     else:
-        edge_index = torch.tensor([src_list,dst_list], dtype=torch.long)
+        edge_index = torch.tensor([src_list,dst_list], dtype=torch.long, device=entity_x.device)
         edge_attr = torch.stack(attr_list)
             
     return edge_index, edge_attr
@@ -259,15 +259,15 @@ def build_layout_nodes(entity_meta, entity_x, max_slots=MAX_SLOTS):
         local_entities = local_entities_groupped_by_layout[(p,c)]
         pooled = entity_x[local_entities].mean(dim=0)
 
-        occ_mask = torch.zeros(max_slots) # padded to max_slots
+        occ_mask = torch.zeros(max_slots, device=entity_x.device) # padded to max_slots
         for local_i in local_entities:
             occ_mask[slot_ids[local_i].item()] = 1.0
 
         occ_masks[(p,c)] = occ_mask
         pooled_features[(p,c)] = pooled
 
-        nb_children = torch.tensor([float(len(local_entities))])
-        layout_x_list.append(torch.cat([pooled, occ_mask,nb_children, torch.tensor([float(c)])]))
+        nb_children = torch.tensor([float(len(local_entities))], device=entity_x.device)
+        layout_x_list.append(torch.cat([pooled, occ_mask,nb_children, torch.tensor([float(c)], device=entity_x.device)]))
         
     layout_x = torch.stack(layout_x_list)
     layout_local_idx_map = {p:i for i,p in enumerate(layout_keys)}
@@ -366,18 +366,18 @@ def build_inter_panel_layout_edges(layout_local_idx_map, occ_masks, pooled_featu
                 # forward
                 src_list.append(i)
                 dst_list.append(j)
-                attr_list.append(torch.cat([torch.tensor([1.0, float(delta_number)]), occ_mask_delta_fwd, pooled_feat_delta_fwd]))
+                attr_list.append(torch.cat([torch.tensor([1.0, float(delta_number)], device=occ_dst.device), occ_mask_delta_fwd, pooled_feat_delta_fwd]))
                 
                 # backward
                 src_list.append(j)
                 dst_list.append(i)
-                attr_list.append(torch.cat([torch.tensor([-1.0, float(-delta_number)]), occ_mask_delta_bwd, pooled_feat_delta_bwd]))
+                attr_list.append(torch.cat([torch.tensor([-1.0, float(-delta_number)], device=occ_dst.device), occ_mask_delta_bwd, pooled_feat_delta_bwd]))
 
     if not src_list:
-        edge_index = torch.empty((2,0), dtype=torch.long)
-        edge_attr = torch.empty((0, 2 + MAX_SLOTS + LATENT_DIM + len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"])), dtype=torch.float)
+        edge_index = torch.empty((2,0), dtype=torch.long, device=occ_masks[list(occ_masks.keys())[0]].device if occ_masks else 'cpu')
+        edge_attr = torch.empty((0, 2 + MAX_SLOTS + LATENT_DIM + len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"])), dtype=torch.float, device=occ_masks[list(occ_masks.keys())[0]].device if occ_masks else 'cpu')
     else:
-        edge_index = torch.tensor([src_list,dst_list], dtype=torch.long)
+        edge_index = torch.tensor([src_list,dst_list], dtype=torch.long, device=occ_dst.device)
         edge_attr = torch.stack(attr_list)
 
     return edge_index, edge_attr
