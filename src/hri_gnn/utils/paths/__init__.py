@@ -76,3 +76,23 @@ def get_dataset_path(name:str)-> tuple[Path, int]:
         "Please check your .env file."
     )
     return dataset_path, length_per_config
+
+def get_precomputed_dataset_path(name:str)-> tuple[Path, int]:
+    """
+    Returns a machine-independent absolute Path to a specific precomputed dataset folder.
+
+    Args:
+        name (str): Name of the dataset
+    
+    Returns:
+        tuple[Path, int]: Path to the precomputed dataset and the number of problems per config
+    """
+    if RAW_DATA_FOLDER_PATH is not None:
+        dataset_path = RAW_DATA_FOLDER_PATH.parent / "processed" / name
+        length_per_config = int(name.split('-')[1])
+    else:
+        raise ValueError(
+        "Environment variable 'RAW_DATA_FOLDER_PATH' is missing or not set. "
+        "Please check your .env file."
+    )
+    return dataset_path, length_per_config
