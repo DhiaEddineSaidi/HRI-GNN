@@ -4,6 +4,7 @@
 # Data
 ressources/raw/raven-20000/
 ressources/raw/raven-100/
+ressources/processed/
 
 # Environment variables
 .env
