@@ -266,8 +266,8 @@ def plot_attributes_curves(history, nb_epochs, attributes=list(ENTITY_ATTRIBUTES
         ax_overall.grid(True, alpha=0.2, color='#555')
         
         if save_path:
-            plt.savefig(save_path/"attributes_curves"/f"{attribute}_metrics_curves.png")
-            print(f"\n[OK] {attribute} metric curves saved to {save_path/"attributes_curves"/f"{attribute}_metrics_curves.png"}")
+            plt.savefig(save_path/"attributes_curves"/'cnn'/f"{attribute}_metrics_curves.png")
+            print(f"\n[OK] {attribute} metric curves saved to {save_path/"attributes_curves"/'cnn'/f"{attribute}_metrics_curves.png"}")
         plt.close()
 
 def plot_metrics_curves(history, metric, nb_epochs, save_path=None):
@@ -314,8 +314,8 @@ def plot_metrics_curves(history, metric, nb_epochs, save_path=None):
     ax_overall.grid(True, alpha=0.2, color='#555')
         
     if save_path:
-        plt.savefig(save_path/"metric_curves"/f"{metric}_curves.png")
-        print(f"\n[OK] {metric} curves saved to {save_path/"metric_curves"/f'{metric}_curves.png'}")
+        plt.savefig(save_path/"metric_curves"/'cnn'/f"{metric}_curves.png")
+        print(f"\n[OK] {metric} curves saved to {save_path/"metric_curves"/'cnn'/f'{metric}_curves.png'}")
     plt.close()
 
 
@@ -332,16 +332,16 @@ def plot_confusion_matrices(history,validation_results, attributes=list(ENTITY_A
             fig, ax = plot_confusion_matrix(conf_mat=np.asarray(source[attr_conf_mat_name]), class_names=class_names, figsize=(10, 7))
             ax.set_title(f'{split} {attribute} Confusion matrix')
             if save_path: 
-                plt.savefig(save_path/'confusion_matrices'/split/f"{attribute}_confusion_matrix.png")
-                print(f"\n[OK] Confusion matrix for {split} {attribute} saved to {save_path/'confusion_matrices'/split/f'{attribute}_confusion_matrix.png'}")
+                plt.savefig(save_path/'confusion_matrices'/'cnn'/split/f"{attribute}_confusion_matrix.png")
+                print(f"\n[OK] Confusion matrix for {split} {attribute} saved to {save_path/'confusion_matrices'/'cnn'/split/f'{attribute}_confusion_matrix.png'}")
             plt.close()
         all_conf_mat_name = f"{split}_confusion_matrix"
         all_class_name = [entity_value for entity_values in ENTITY_ATTRIBUTES.values() for entity_value in entity_values]
         if save_path:
             fig, ax = plot_confusion_matrix(conf_mat=np.asarray(source[all_conf_mat_name]), class_names=all_class_name, figsize=(14, 10))
             ax.set_title(f'{split} Overall Confusion matrix')
-            plt.savefig(save_path/'confusion_matrices'/split/f"overall_confusion_matrix.png")
-            print(f"\n[OK] Confusion matrix for {split} overall saved to {save_path/'confusion_matrices'/split/f'overall_confusion_matrix.png'}")
+            plt.savefig(save_path/'confusion_matrices'/'cnn'/split/f"overall_confusion_matrix.png")
+            print(f"\n[OK] Confusion matrix for {split} overall saved to {save_path/'confusion_matrices'/'cnn'/split/f'overall_confusion_matrix.png'}")
         plt.close()
 
 
@@ -376,6 +376,6 @@ def plot_composed_metrics_curves(history, metric, nb_epochs, save_path=None):
             ax.legend()
             ax.grid(True, alpha=0.2, color='#555')
     if save_path:
-        plt.savefig(save_path/'metric_curves'/f"{metric}_composed_curves.png")
-        print(f"\n[OK] Composed {metric} curves saved to {save_path/'metric_curves'/f'{metric}_composed_curves.png'}")
+        plt.savefig(save_path/'metric_curves'/'cnn'/f"{metric}_composed_curves.png")
+        print(f"\n[OK] Composed {metric} curves saved to {save_path/'metric_curves'/'cnn'/f'{metric}_composed_curves.png'}")
     plt.close()

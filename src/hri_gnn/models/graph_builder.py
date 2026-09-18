@@ -377,6 +377,7 @@ def build_inter_panel_layout_edges(layout_local_idx_map, occ_masks, pooled_featu
         edge_index = torch.empty((2,0), dtype=torch.long, device=occ_masks[list(occ_masks.keys())[0]].device if occ_masks else 'cpu')
         edge_attr = torch.empty((0, 2 + MAX_SLOTS + LATENT_DIM + len(ENTITY_ATTRIBUTES["type"]) + len(ENTITY_ATTRIBUTES["size"]) + len(ENTITY_ATTRIBUTES["color"])), dtype=torch.float, device=occ_masks[list(occ_masks.keys())[0]].device if occ_masks else 'cpu')
     else:
+        # pyrefly: ignore [unbound-name]
         edge_index = torch.tensor([src_list,dst_list], dtype=torch.long, device=occ_dst.device)
         edge_attr = torch.stack(attr_list)
 

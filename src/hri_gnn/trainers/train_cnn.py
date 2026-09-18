@@ -158,10 +158,11 @@ def run_training(dataset_name, percentage_to_use, nb_epochs, check_frequency, ba
 
     # 6. Validation
     validation_results = trainer.validate(val_loader)
-    print_validation_results(validation_results,save_path=output_path)
+    validation_result_save_path = output_path/"history"/"cnn"
+    print_validation_results(validation_results,save_path=validation_result_save_path)
 
     # 7. Saving the training history
-    history_path = output_path/"training_history.json"
+    history_path = output_path/"history"/"cnn"/"training_history.json"
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     print(f"\n[OK] Training history saved : {history_path}")

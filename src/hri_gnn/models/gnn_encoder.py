@@ -95,6 +95,7 @@ class RavenGnnEncoder(nn.Module):
                 if node_type not in h_dict_new:
                     h_dict_new[node_type] = h_dict[node_type]
                 else:
+                    # pyrefly: ignore [bad-index]
                     h_dict_new[node_type] = self.norms[layer_idx][node_type](h_dict_new[node_type])
                     if not is_last_layer:
                         h_dict_new[node_type] = F.relu(h_dict_new[node_type])

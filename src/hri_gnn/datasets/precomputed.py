@@ -47,7 +47,8 @@ class PrecomputedRavenDataset(Dataset):
             pt_files = list(config_folder_path.glob(f"RAVEN_*_{split}.pt"))
             for pt_file in pt_files:
                 problem_id = int(pt_file.stem.split('_')[1])
-                self.index_list.append((config, problem_id, pt_file))
+                config_id = Configuration.all().index(config)
+                self.index_list.append((config_id, problem_id, pt_file))
                 
         if self.percentage_limit != 1.0:
             limit = int(len(self.index_list) * self.percentage_limit)
@@ -64,9 +65,9 @@ class PrecomputedRavenDataset(Dataset):
                 'layout_keys': List of 8 layout_keys lists
             }
         """
-        config, problem_id, pt_file = self.index_list[index]
+        config_id, problem_id, pt_file = self.index_list[index]
         content = torch.load(pt_file, weights_only=False)
-        return content
+        return content, config_id , problem_id
 
 
 def precomputed_collate(batch):
@@ -77,15 +78,19 @@ def precomputed_collate(batch):
         batch (list): List of dictionaries returned by PrecomputedRavenDataset.__getitem__
         
     Returns:
-        tuple: (pyg_batch, batched_layout_keys)
+        tuple: (pyg_batch, batched_layout_keys, all_configs, all_problem_ids)
     """
     all_data = []
+    all_configs = []
+    all_problem_ids = []
     all_layout_keys = []
     
-    for item in batch:
-        all_data.extend(item['data_list'])
-        all_layout_keys.extend(item['layout_keys'])
+    for content, config_id, problem_id in batch:
+        all_data.extend(content['data_list'])
+        all_configs.extend([config_id] * len(content['layout_keys']))
+        all_problem_ids.extend([problem_id] * len(content['layout_keys']))
+        all_layout_keys.extend(content['layout_keys'])
         
     pyg_batch = Batch.from_data_list(all_data)
     
-    return pyg_batch, all_layout_keys
+    return pyg_batch, all_layout_keys, all_configs, all_problem_ids

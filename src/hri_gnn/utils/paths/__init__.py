@@ -40,6 +40,8 @@ def output_paths(output_path):
     (output_path/"history"/"gnn").mkdir(exist_ok=True)
     (output_path/"history"/"cnn").mkdir(exist_ok=True)
     (output_path/"confusion_matrices").mkdir(exist_ok=True)
+    (output_path/"confusion_matrices"/"gnn").mkdir(exist_ok=True)
+    (output_path/"confusion_matrices"/"cnn").mkdir(exist_ok=True)
     (output_path/"metric_curves").mkdir(exist_ok=True)
     (output_path/"metric_curves"/"gnn").mkdir(exist_ok=True)
     (output_path/"metric_curves"/"cnn").mkdir(exist_ok=True)
@@ -49,7 +51,7 @@ def output_paths(output_path):
     (output_path / "checkpoints" / "cnn").mkdir(exist_ok=True)
     (output_path / "models").mkdir(exist_ok=True)
     for split in SPLITS:
-        (output_path/"confusion_matrices"/split).mkdir(exist_ok=True)
+        (output_path/"confusion_matrices"/'cnn'/split).mkdir(exist_ok=True)
 
 
 

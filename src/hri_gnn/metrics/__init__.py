@@ -33,20 +33,20 @@ class CompositeMetric:
               self._create_confusion_matrix_functions()
             case _:
               raise ValueError(f"Unknown metric: {metric}")
-    
+
     def is_metrics_detailed(self):
       return self.metrics_detailed
-    
+
     def get_metrics_names(self):
       return self.metrics_names
-      
+
     def _convert_logits_to_pred(self, pred_logits):
       pred_type = pred_logits['pred_type_logits'].argmax(dim=1)
       pred_size = pred_logits['pred_size_logits'].argmax(dim=1)
       pred_color = pred_logits['pred_color_logits'].argmax(dim=1)
       pred_angle = pred_logits['pred_angle_logits'].argmax(dim=1)
       return {'type': pred_type, 'size': pred_size, 'color': pred_color, 'angle': pred_angle}
-    
+
     def _create_targets_dict(self, y_true):
       return {'type': y_true[:,0], 'size': y_true[:,1], 'color': y_true[:,2], 'angle': y_true[:,3]}
 
@@ -165,9 +165,9 @@ class CompositeMetric:
         return confusion_matrix_dict
       else:
         return {"confusion_matrix": confusion_matrix_dict["confusion_matrix"]}
-      
+
     def compute(self, pred_logits, y_true):
-      
+
       predictions = self._convert_logits_to_pred(pred_logits)
       targets = self._create_targets_dict(y_true)
 
@@ -190,7 +190,7 @@ class CompositeMetric:
 class TrainingTimer:
     """
     Timer context manager for training.
-    
+
     Args
     ----
     model: nn.Module, the model to train
@@ -211,33 +211,33 @@ class TrainingTimer:
       return False
 
 
-def gnn_accuracy(scores_per_problem, y_batch, candidate_ids):
-  """
-  Compute the accuracy of the GNN model for the RAVEN dataset.
+# def gnn_accuracy(scores_per_problem, y_batch, candidate_ids):
+#   """
+#   Compute the accuracy of the GNN model for the RAVEN dataset.
 
-  Parameters
-  ----------
-  scores_per_problem : list[torch.Tensor]
-    A list of scores for each problem in the batch.
-  y_batch : torch.Tensor
-    The batch vector containing the target candidate IDs.
-  candidate_ids : list[int]
-    The candidate IDs for each problem in the batch.
+#   Parameters
+#   ----------
+#   scores_per_problem : list[torch.Tensor]
+#     A list of scores for each problem in the batch.
+#   y_batch : torch.Tensor
+#     The batch vector containing the target candidate IDs.
+#   candidate_ids : list[int]
+#     The candidate IDs for each problem in the batch.
 
-  Returns
-  -------
-  float
-    The accuracy of the GNN model for the RAVEN dataset.
-  """
-  candidate_ids = list(candidate_ids)
-  n_correct = 0
-  for i, scores in enumerate(scores_per_problem):
-    predicted_index = scores.argmax().item()
-    predicted_candidate_id = candidate_ids[predicted_index]
-    target_candidate_id = y_batch[i * len(candidate_ids)].item()
-    if predicted_candidate_id == target_candidate_id:
-      n_correct += 1
-  return n_correct
+#   Returns
+#   -------
+#   float
+#     The accuracy of the GNN model for the RAVEN dataset.
+#   """
+#   candidate_ids = list(candidate_ids)
+#   n_correct = 0
+#   for i, scores in enumerate(scores_per_problem):
+#     predicted_index = scores.argmax().item()
+#     predicted_candidate_id = candidate_ids[predicted_index]
+#     target_candidate_id = y_batch[i * len(candidate_ids)].item()
+#     if predicted_candidate_id == target_candidate_id:
+#       n_correct += 1
+#   return n_correct
 
 
 def gnn_predictions(scores_per_problem, y_batch, candidate_ids):
@@ -285,6 +285,7 @@ class GnnMetrics:
   def compute(self) -> dict:
     """
     Returns a dict with:
+      - 'accuracy'         : macro-averaged accuracy (float)
       - 'precision'        : macro-averaged precision (float)
       - 'recall'           : macro-averaged recall (float)
       - 'f1'               : macro-averaged F1 (float)
@@ -293,15 +294,16 @@ class GnnMetrics:
     preds   = torch.cat(self._all_preds)
     targets = torch.cat(self._all_targets)
     n = self.num_candidates
-
+    accuracy_fn = MulticlassAccuracy(num_classes=n, average='macro')
     precision_fn = MulticlassPrecision(num_classes=n, average='macro')
     recall_fn    = MulticlassRecall(num_classes=n, average='macro')
     f1_fn        = MulticlassF1Score(num_classes=n, average='macro')
     cm_fn        = MulticlassConfusionMatrix(num_classes=n)
 
     return {
+      'accuracy':         accuracy_fn(preds, targets).item(),
       'precision':        precision_fn(preds, targets).item(),
       'recall':           recall_fn(preds, targets).item(),
       'f1':               f1_fn(preds, targets).item(),
       'confusion_matrix': cm_fn(preds, targets),
-    }
+    }
