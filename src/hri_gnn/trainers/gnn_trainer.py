@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 import torch
 import torch.nn as nn
@@ -132,7 +133,7 @@ class GnnTrainer:
 
         return test_step_output
 
-    def fit(self, train_dataloader, test_dataloader, epochs, max_grad_norm=1.0, checkpoint_name_prefix=None, check_frequency=5, save_final_version= False, verbose=True):
+    def fit(self, train_dataloader, test_dataloader, epochs, max_grad_norm=1.0, checkpoint_name_prefix=None, check_frequency=5, save_final_version=False, verbose=True, history_save_path=None):
         
         history = defaultdict(list)
 
@@ -267,6 +268,11 @@ class GnnTrainer:
                     checkpoint_path = self.output_path / "checkpoints" /"gnn"/ f"{prefix}_checkpoint_epoch_{epoch+1}.pth"
                     torch.save(self.gnn_model.state_dict(), checkpoint_path)
                     print(f' > Saved checkpoint: {checkpoint_path}')
+                    # Save history alongside checkpoint so crash recovery is possible
+                    if history_save_path is not None:
+                        with open(history_save_path, 'w') as _hf:
+                            json.dump({k: (v.tolist() if hasattr(v, 'tolist') else v) for k, v in history.items()}, _hf, indent=2)
+                        print(f' > Saved history  : {history_save_path}')
                     if save_final_version and (epoch + 1) == epochs:
                         final_model_path = self.output_path / "models" / f"{prefix}_final.pth"
                         torch.save(self.gnn_model.state_dict(), final_model_path)
@@ -307,7 +313,6 @@ class GnnTrainer:
         
         gnn_metrics = GnnMetrics(num_candidates=len(self.gnn_model.candidate_ids))
         
-        total_loss = 0.0
         total_problems = 0
         num_batches = 0
 
@@ -339,7 +344,6 @@ class GnnTrainer:
         metrics_results = gnn_metrics.compute()
 
         results = {
-            'val_loss': total_loss / max(total_problems, 1),
             'val_accuracy': metrics_results['accuracy'],
             'val_precision': metrics_results['precision'],
             'val_recall': metrics_results['recall'],
@@ -352,7 +356,7 @@ class GnnTrainer:
         # Print validation results
         output_string = "\nValidation finished!....\n"
         output_string += f"Number of problems: {total_problems} | Number of batches: {num_batches}\n"
-        output_string += f"Loss: {results['val_loss']:.4f} | Accuracy: {results['val_accuracy']:.4f}\n"
+        output_string += f"Accuracy: {results['val_accuracy']:.4f}\n"
         output_string += f"Precision: {results['val_precision']:.4f} | Recall: {results['val_recall']:.4f} | F1: {results['val_f1']:.4f}\n"
         print(output_string)
 

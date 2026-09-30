@@ -46,6 +46,8 @@ def gine_mlp(hidden_dim: int, dropout: float = 0.0):
 class RavenGnnEncoder(nn.Module):
     def __init__(self, in_dims: dict, hidden_dim: int, num_layers: int, active_edge_types=None, dropout: float = 0.0):
         """
+        GNN encoder using GINEConv layers (Graph Isomorphism Network with Edge features).
+
         Args:
           in_dims: {'entity': in_dim_entity, 'layout': in_dim_layout}
           hidden_dim: hidden dimension of node embeddings
@@ -81,7 +83,7 @@ class RavenGnnEncoder(nn.Module):
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         h_dict = self.input_proj(x_dict)
-        
+
         active_edge_index_dict = {edge_type: edge_index_dict[edge_type] for edge_type in self.active_edge_types.keys()}
         active_edge_attr_dict = {
             edge_type: self.edge_norms[f"{edge_type[0]}_{edge_type[1]}_{edge_type[2]}"](edge_attr_dict[edge_type])
@@ -101,7 +103,7 @@ class RavenGnnEncoder(nn.Module):
                         h_dict_new[node_type] = F.relu(h_dict_new[node_type])
                         h_dict_new[node_type] = self.dropout(h_dict_new[node_type])
             h_dict = h_dict_new
-            
+
         return h_dict
 
 class BatchedAttentionPooling(nn.Module):
